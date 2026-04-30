@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function sessionDoc(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId));
+    }
+
+    function isSessionHost(sessionId) {
+      return isSignedIn() &&
+        sessionDoc(sessionId).data.hostUID == request.auth.uid;
+    }
+
+    function isSessionCollaborator(sessionId) {
+      return isSignedIn() &&
+        request.auth.uid in sessionDoc(sessionId).data.collaborators;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSessionHost(sessionId);
+
+      match /tracks/{trackId} {
+        allow read: if isSignedIn();
+        allow create: if isSessionHost(sessionId) || isSessionCollaborator(sessionId);
+        allow delete: if isSessionHost(sessionId);
+
+        // Any authenticated user can update voteCount.
+        // Host/collaborators can perform broader updates if needed.
+        allow update: if isSignedIn() && (
+          isSessionHost(sessionId) ||
+          isSessionCollaborator(sessionId) ||
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['voteCount'])
+        );
+      }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+        allow create: if isSessionHost(sessionId) || isSessionCollaborator(sessionId);
+        allow update, delete: if false;
+      }
+    }
+  }
+}
