@@ -93,6 +93,9 @@ class _LobbyViewState extends State<_LobbyView> {
     final trimmedName = sessionName.trim();
     if (trimmedName.isEmpty) return;
 
+    // Let the dialog route fully settle before provider state changes.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+
     await sessionProvider.createSession(
       sessionName: trimmedName,
       hostUID: currentUser.uid,

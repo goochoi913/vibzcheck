@@ -1,6 +1,6 @@
-import * as functions from "firebase-functions";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import { defineSecret } from "firebase-functions/params";
 
 const spotifyTokenUrl = "https://accounts.spotify.com/api/token";
 const spotifyApiBase = "https://api.spotify.com/v1";
@@ -18,13 +18,12 @@ type SpotifyConfig = {
   clientSecret: string;
 };
 
-function getSpotifyConfig(): SpotifyConfig {
-  const config = functions.config().spotify as
-    | { client_id?: string; client_secret?: string }
-    | undefined;
+const spotifyClientId = defineSecret("SPOTIFY_CLIENT_ID");
+const spotifyClientSecret = defineSecret("SPOTIFY_CLIENT_SECRET");
 
-  const clientId = config?.client_id?.trim() ?? "";
-  const clientSecret = config?.client_secret?.trim() ?? "";
+function getSpotifyConfig(): SpotifyConfig {
+  const clientId = spotifyClientId.value().trim();
+  const clientSecret = spotifyClientSecret.value().trim();
 
   if (!clientId || !clientSecret) {
     throw new HttpsError(
@@ -71,7 +70,11 @@ async function getSpotifyAccessToken(): Promise<string> {
 }
 
 export const searchSpotifyTracks = onCall(
-  { region: "us-central1", invoker: "public" },
+  {
+    region: "us-central1",
+    invoker: "public",
+    secrets: [spotifyClientId, spotifyClientSecret],
+  },
   async (request) => {
     const query = (request.data?.query as string | undefined ?? "").trim();
 
@@ -86,7 +89,8 @@ export const searchSpotifyTracks = onCall(
     const url = new URL(`${spotifyApiBase}/search`);
     url.searchParams.set("q", query);
     url.searchParams.set("type", "track");
-    url.searchParams.set("limit", "20");
+    // This app credential currently supports limits up to 10.
+    url.searchParams.set("limit", "10");
 
     const response = await fetch(url, {
       headers: {
@@ -130,7 +134,11 @@ export const searchSpotifyTracks = onCall(
 );
 
 export const getSpotifyTrackDetails = onCall(
-  { region: "us-central1", invoker: "public" },
+  {
+    region: "us-central1",
+    invoker: "public",
+    secrets: [spotifyClientId, spotifyClientSecret],
+  },
   async (request) => {
     const spotifyTrackId = (
       request.data?.spotifyTrackId as string | undefined ?? ""
