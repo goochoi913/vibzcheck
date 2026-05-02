@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../firebase/firestore_service.dart';
+import '../../models/user_stats.dart';
 import '../../providers/auth_provider.dart';
-import '../auth/login_screen.dart';
 import '../../widgets/user_avatar.dart';
+import '../auth/login_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Future<UserStats>? _statsFuture;
+  String? _statsUserUID;
+
+  void _ensureStatsFuture(String userUID) {
+    if (_statsUserUID == userUID && _statsFuture != null) return;
+    _statsUserUID = userUID;
+    _statsFuture = FirestoreService.instance.getUserStats(userUID);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,6 +34,8 @@ class ProfileScreen extends StatelessWidget {
         body: Center(child: Text('No user profile found. Please sign in.')),
       );
     }
+
+    _ensureStatsFuture(user.uid);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -38,7 +56,10 @@ class ProfileScreen extends StatelessWidget {
               Text(
                 user.displayName,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -65,7 +86,9 @@ class ProfileScreen extends StatelessWidget {
                             .map(
                               (genre) => Chip(
                                 label: Text(genre),
-                                backgroundColor: Colors.cyan.withValues(alpha: 0.18),
+                                backgroundColor: Colors.cyan.withValues(
+                                  alpha: 0.18,
+                                ),
                               ),
                             )
                             .toList(),
@@ -77,9 +100,46 @@ class ProfileScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              _StatTile(label: 'Sessions joined', value: '0'),
-              _StatTile(label: 'Total votes cast', value: '0'),
-              _StatTile(label: 'Tracks added', value: '0'),
+              FutureBuilder<UserStats>(
+                future: _statsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const _StatsLoadingSkeleton();
+                  }
+
+                  if (snapshot.hasError) {
+                    return Text(
+                      'Unable to load stats right now.',
+                      style: TextStyle(color: Colors.red.shade300),
+                    );
+                  }
+
+                  final stats =
+                      snapshot.data ??
+                      const UserStats(
+                        sessionsJoined: 0,
+                        tracksAdded: 0,
+                        votesCast: 0,
+                      );
+
+                  return Column(
+                    children: [
+                      _StatTile(
+                        label: 'Sessions joined',
+                        value: '${stats.sessionsJoined}',
+                      ),
+                      _StatTile(
+                        label: 'Total votes cast',
+                        value: '${stats.votesCast}',
+                      ),
+                      _StatTile(
+                        label: 'Tracks added',
+                        value: '${stats.tracksAdded}',
+                      ),
+                    ],
+                  );
+                },
+              ),
               const SizedBox(height: 28),
               TextButton(
                 onPressed: () async {
@@ -96,6 +156,81 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StatsLoadingSkeleton extends StatelessWidget {
+  const _StatsLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [_StatSkeletonTile(), _StatSkeletonTile(), _StatSkeletonTile()],
+    );
+  }
+}
+
+class _StatSkeletonTile extends StatefulWidget {
+  const _StatSkeletonTile();
+
+  @override
+  State<_StatSkeletonTile> createState() => _StatSkeletonTileState();
+}
+
+class _StatSkeletonTileState extends State<_StatSkeletonTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final base = Colors.grey.shade700;
+        final highlight = Colors.grey.shade500;
+        final blended = Color.lerp(base, highlight, _controller.value) ?? base;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: blended,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 26),
+              Container(
+                width: 34,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: blended,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

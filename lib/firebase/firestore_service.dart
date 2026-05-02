@@ -4,6 +4,7 @@ import '../models/message_model.dart';
 import '../models/session_model.dart';
 import '../models/track_model.dart';
 import '../models/user_model.dart';
+import '../models/user_stats.dart';
 
 class AlreadyVotedException implements Exception {
   const AlreadyVotedException([
@@ -220,6 +221,38 @@ class FirestoreService {
     ).doc(trackId).set({'moodTags': moodTags}, SetOptions(merge: true));
   }
 
+  Future<UserStats> getUserStats(String userUID) async {
+    final sessionsJoined = await _safeCount(
+      sessionsRef().where('collaborators', arrayContains: userUID),
+    );
+
+    final tracksAdded = await _safeCount(
+      _firestore
+          .collectionGroup('tracks')
+          .where('addedByUID', isEqualTo: userUID),
+    );
+
+    final votesCast = await _safeCount(
+      _firestore.collectionGroup('votes').where('voterUID', isEqualTo: userUID),
+    );
+
+    return UserStats(
+      sessionsJoined: sessionsJoined,
+      tracksAdded: tracksAdded,
+      votesCast: votesCast,
+    );
+  }
+
+  Future<int> _safeCount(Query<Map<String, dynamic>> query) async {
+    try {
+      final aggregate = await query.count().get();
+      return aggregate.count ?? 0;
+    } catch (_) {
+      final snapshot = await query.get();
+      return snapshot.docs.length;
+    }
+  }
+
   Future<void> sendMessage({
     required String sessionId,
     required String senderUID,
@@ -245,9 +278,7 @@ class FirestoreService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(
-                (doc) => MessageModel.fromMap(doc.data(), messageId: doc.id),
-              )
+              .map((doc) => MessageModel.fromMap(doc.data(), messageId: doc.id))
               .toList(),
         );
   }
@@ -257,9 +288,8 @@ class FirestoreService {
     required String messageId,
     required String reaction,
   }) {
-    return messagesRef(sessionId).doc(messageId).set(
-      {'reaction': reaction},
-      SetOptions(merge: true),
-    );
+    return messagesRef(
+      sessionId,
+    ).doc(messageId).set({'reaction': reaction}, SetOptions(merge: true));
   }
 }
