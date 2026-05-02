@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirestoreService {
-  FirestoreService({FirebaseFirestore? firestore})
+  FirestoreService._({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  static final FirestoreService instance = FirestoreService._();
 
   final FirebaseFirestore _firestore;
 
