@@ -32,7 +32,7 @@ class PlaylistScreen extends StatelessWidget {
           SpotifySearchSheet.show(
             context: context,
             sessionId: session.sessionId,
-            onTrackSelected: (_) {},
+            onTrackSelected: (track) {},
           );
         },
         icon: const Icon(Icons.add),
@@ -43,7 +43,7 @@ class PlaylistScreen extends StatelessWidget {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: sessionProvider.tracks.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final track = sessionProvider.tracks[index];
                 return Row(

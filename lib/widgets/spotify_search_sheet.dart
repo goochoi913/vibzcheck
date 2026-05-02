@@ -28,7 +28,7 @@ class SpotifySearchSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) {
+      builder: (context) {
         return SpotifySearchSheet(
           sessionId: sessionId,
           onTrackSelected: onTrackSelected,
@@ -196,7 +196,8 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
                     : ListView.separated(
                         controller: scrollController,
                         itemCount: _results.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (context, index) =>
+                            const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final item = _results[index];
                           return ListTile(
@@ -209,7 +210,7 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
                                 child: CachedNetworkImage(
                                   imageUrl: item.albumArtUrl,
                                   fit: BoxFit.cover,
-                                  placeholder: (_, __) => Container(
+                                  placeholder: (context, url) => Container(
                                     color: Colors.white12,
                                     alignment: Alignment.center,
                                     child: const SizedBox(
@@ -220,11 +221,12 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
                                       ),
                                     ),
                                   ),
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: Colors.white12,
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.music_note),
-                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      Container(
+                                        color: Colors.white12,
+                                        alignment: Alignment.center,
+                                        child: const Icon(Icons.music_note),
+                                      ),
                                 ),
                               ),
                             ),

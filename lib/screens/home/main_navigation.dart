@@ -9,8 +9,8 @@ import 'home_screen.dart';
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
-  static _MainNavigationState? maybeOf(BuildContext context) {
-    return context.findAncestorStateOfType<_MainNavigationState>();
+  static void switchToTab(BuildContext context, int index) {
+    context.findAncestorStateOfType<_MainNavigationState>()?.switchToTab(index);
   }
 
   @override

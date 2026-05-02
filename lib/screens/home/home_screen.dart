@@ -175,7 +175,8 @@ class _LobbyViewState extends State<_LobbyView> {
 
                   return ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final session = filtered[index];
                       return _SessionCard(
@@ -306,8 +307,7 @@ class _ActiveSessionView extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () =>
-                        MainNavigation.maybeOf(context)?.switchToTab(1),
+                    onPressed: () => MainNavigation.switchToTab(context, 1),
                     icon: const Icon(Icons.library_music_outlined),
                     label: const Text('Playlist'),
                   ),
@@ -315,8 +315,7 @@ class _ActiveSessionView extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () =>
-                        MainNavigation.maybeOf(context)?.switchToTab(2),
+                    onPressed: () => MainNavigation.switchToTab(context, 2),
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: const Text('Chat'),
                   ),
@@ -327,7 +326,7 @@ class _ActiveSessionView extends StatelessWidget {
             Text('Collaborators: ${session.collaborators.length}'),
             const SizedBox(height: 8),
             Consumer<SessionProvider>(
-              builder: (_, provider, __) {
+              builder: (context, provider, child) {
                 return Text('Tracks in queue: ${provider.tracks.length}');
               },
             ),
