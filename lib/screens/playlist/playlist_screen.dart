@@ -1,9 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../firebase/firestore_service.dart';
+import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/spotify_search_sheet.dart';
@@ -129,7 +128,30 @@ class _CollaboratorPlaylistView extends StatelessWidget {
     final session = sessionProvider.currentSession!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(session.sessionName)),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(session.sessionName),
+            FutureBuilder<UserModel?>(
+              future: FirestoreService.instance.getUser(session.hostUID),
+              builder: (context, snapshot) {
+                final hostName = snapshot.data?.displayName.isNotEmpty == true
+                    ? snapshot.data!.displayName
+                    : session.hostUID;
+                return Text(
+                  'Hosted by $hostName',
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontWeight: FontWeight.w400,
+                    fontSize: 12,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           SpotifySearchSheet.show(
@@ -152,7 +174,7 @@ class _CollaboratorPlaylistView extends StatelessWidget {
               track: track,
               isHost: false,
               currentVoteCount: track.voteCount,
-              onVote: () {},
+              onVote: () => sessionProvider.voteOnTrack(track.trackId),
             ),
           );
         },

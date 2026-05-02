@@ -73,6 +73,10 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void voteOnTrack(String trackId) {
+    debugPrint('voteOnTrack tapped for trackId: $trackId');
+  }
+
   Future<void> _listenToSession(String sessionId) async {
     await _cancelSubscriptions();
 
