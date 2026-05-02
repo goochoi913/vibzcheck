@@ -55,7 +55,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!enabled) {
       await FirebaseMessaging.instance.deleteToken();
-      await FirestoreService.instance.updateUser(authUser.copyWith(fcmToken: ''));
+      await FirestoreService.instance.updateUser(
+        authUser.copyWith(fcmToken: ''),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Session notifications disabled.')),
@@ -63,11 +65,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
     final token = await FirebaseMessaging.instance.getToken() ?? '';
-    await FirestoreService.instance.updateUser(authUser.copyWith(fcmToken: token));
+    await FirestoreService.instance.updateUser(
+      authUser.copyWith(fcmToken: token),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Session notifications enabled.')),
+      SnackBar(
+        content: Text(
+          token.isEmpty
+              ? 'Notifications enabled, but token is not available yet.'
+              : 'Session notifications enabled.',
+        ),
+      ),
     );
   }
 
@@ -112,7 +127,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Session history cleared for ${snapshot.docs.length} sessions.')),
+      SnackBar(
+        content: Text(
+          'Session history cleared for ${snapshot.docs.length} sessions.',
+        ),
+      ),
     );
   }
 
@@ -185,7 +204,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _showReAuthRequiredDialog();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to delete account: ${error.message ?? error.code}')),
+          SnackBar(
+            content: Text(
+              'Unable to delete account: ${error.message ?? error.code}',
+            ),
+          ),
         );
       }
     } catch (error) {
@@ -282,7 +305,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.history_toggle_off),
             title: const Text('Clear Session History'),
-            subtitle: const Text('Remove your UID from prior collaborator lists.'),
+            subtitle: const Text(
+              'Remove your UID from prior collaborator lists.',
+            ),
             onTap: _clearSessionHistory,
           ),
           _sectionHeader('Account'),
@@ -298,7 +323,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Delete Account',
               style: TextStyle(color: Colors.redAccent),
             ),
-            subtitle: const Text('This permanently removes your Auth account and profile.'),
+            subtitle: const Text(
+              'This permanently removes your Auth account and profile.',
+            ),
             onTap: _isDeletingAccount ? null : _deleteAccountFlow,
           ),
           _sectionHeader('App Info'),
@@ -310,7 +337,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('VibzCheck', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text(
+                      'VibzCheck',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     const SizedBox(height: 6),
                     const Text('Version 1.0.0'),
                     const Text('Course: CSC 4360 Mobile App Dev Studio'),

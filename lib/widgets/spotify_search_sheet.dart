@@ -43,6 +43,8 @@ class SpotifySearchSheet extends StatefulWidget {
 }
 
 class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
+  static const int _maxQueryLength = 120;
+
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -68,7 +70,12 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
   }
 
   Future<void> _searchTracks(String query) async {
-    final trimmed = query.trim();
+    final trimmed = query.trim().substring(
+      0,
+      query.trim().length > _maxQueryLength
+          ? _maxQueryLength
+          : query.trim().length,
+    );
     if (trimmed.length < 2) {
       if (!mounted) return;
       setState(() {
@@ -203,6 +210,7 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
             controller: _searchController,
             onChanged: _onQueryChanged,
             autofocus: true,
+            maxLength: _maxQueryLength,
             decoration: const InputDecoration(
               labelText: 'Search Spotify tracks',
               prefixIcon: Icon(Icons.search),
@@ -219,6 +227,8 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
                     child: Text(
                       'Search failed: $_errorMessage',
                       textAlign: TextAlign.center,
+                      maxLines: 6,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 )

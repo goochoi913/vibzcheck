@@ -67,36 +67,50 @@ class _LobbyViewState extends State<_LobbyView> {
     final sessionProvider = context.read<SessionProvider>();
     final currentUser = widget.currentUser;
     final controller = TextEditingController();
+    String? errorText;
 
     final sessionName = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Create Room'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Session Name',
-              hintText: 'Ex. Friday Night Mix',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = controller.text.trim();
-                if (name.isEmpty) {
-                  return;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Create Room'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Session Name',
+                hintText: 'Ex. Friday Night Mix',
+                errorText: errorText,
+              ),
+              onChanged: (_) {
+                if (errorText != null) {
+                  setDialogState(() {
+                    errorText = null;
+                  });
                 }
-                Navigator.of(dialogContext).pop(name);
               },
-              child: const Text('Create'),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = controller.text.trim();
+                  if (name.isEmpty) {
+                    setDialogState(() {
+                      errorText = 'Session name is required.';
+                    });
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(name);
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          ),
         );
       },
     );

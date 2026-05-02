@@ -192,6 +192,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final sortedMoodEntries = moodFrequency.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final topTracks = _topVotedTracks();
+    final hasTracks = _tracks.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Insights')),
@@ -232,9 +233,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
           _Section(
             title: 'Mood Profile',
             child: sortedMoodEntries.isEmpty
-                ? Text(
-                    'No mood tags yet. Add songs and tag them first.',
-                    style: TextStyle(color: Colors.grey.shade400),
+                ? _NoTracksInsightsState(
+                    message: 'No mood tags yet. Add songs and tag them first.',
                   )
                 : SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -271,9 +271,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
           _Section(
             title: 'Top Voted Tracks',
             child: topTracks.isEmpty
-                ? Text(
-                    'No tracks in this session yet.',
-                    style: TextStyle(color: Colors.grey.shade400),
+                ? _NoTracksInsightsState(
+                    message: 'No tracks in this session yet.',
                   )
                 : Column(
                     children: topTracks
@@ -287,56 +286,60 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   ),
           ),
           const SizedBox(height: 16),
-          _Section(
-            titleWidget: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Vibes You Might Like',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _isRecommendationsLoading
-                      ? null
-                      : _refreshRecommendations,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
-              ],
-            ),
-            child: _isRecommendationsLoading
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                : _recommendationsError != null
-                ? Text(
-                    'Unable to load recommendations: $_recommendationsError',
-                    style: TextStyle(color: Colors.red.shade300),
-                  )
-                : _recommendations.isEmpty
-                ? Text(
-                    'No recommendations yet. Add more tagged songs and refresh.',
-                    style: TextStyle(color: Colors.grey.shade400),
-                  )
-                : SizedBox(
-                    height: 236,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _recommendations.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final item = _recommendations[index];
-                        return _RecommendationCard(
-                          track: item,
-                          onAddToQueue: () => _addRecommendationToQueue(item),
-                        );
-                      },
+          if (hasTracks)
+            _Section(
+              titleWidget: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Vibes You Might Like',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-          ),
+                  TextButton.icon(
+                    onPressed: _isRecommendationsLoading
+                        ? null
+                        : _refreshRecommendations,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Refresh'),
+                  ),
+                ],
+              ),
+              child: _isRecommendationsLoading
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  : _recommendationsError != null
+                  ? Text(
+                      'Unable to load recommendations: $_recommendationsError',
+                      style: TextStyle(color: Colors.red.shade300),
+                    )
+                  : _recommendations.isEmpty
+                  ? Text(
+                      'No recommendations yet. Add more tagged songs and refresh.',
+                      style: TextStyle(color: Colors.grey.shade400),
+                    )
+                  : SizedBox(
+                      height: 236,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _recommendations.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          final item = _recommendations[index];
+                          return _RecommendationCard(
+                            track: item,
+                            onAddToQueue: () => _addRecommendationToQueue(item),
+                          );
+                        },
+                      ),
+                    ),
+            ),
         ],
       ),
     );
@@ -359,6 +362,25 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NoTracksInsightsState extends StatelessWidget {
+  const _NoTracksInsightsState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(Icons.music_off_rounded, color: Colors.grey.shade500, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message, style: TextStyle(color: Colors.grey.shade400)),
+        ),
+      ],
     );
   }
 }

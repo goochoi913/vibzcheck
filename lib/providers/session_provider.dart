@@ -17,6 +17,7 @@ class SessionProvider extends ChangeNotifier {
   List<TrackModel> _tracks = const [];
   final Set<String> _votedTrackIds = <String>{};
   final Map<String, int> _votePulseTokens = <String, int>{};
+  final Set<String> _voteRequestsInFlight = <String>{};
   bool _newTrackAdded = false;
   TrackModel? _latestTrack;
   bool _hasReceivedInitialTrackSnapshot = false;
@@ -106,7 +107,14 @@ class SessionProvider extends ChangeNotifier {
 
     _errorMessage = null;
 
+    if (_voteRequestsInFlight.contains(trackId)) {
+      _errorMessage = 'You already voted on this track.';
+      notifyListeners();
+      return;
+    }
+
     if (_votedTrackIds.contains(trackId)) {
+      _voteRequestsInFlight.add(trackId);
       _votedTrackIds.remove(trackId);
       notifyListeners();
 
@@ -120,10 +128,13 @@ class SessionProvider extends ChangeNotifier {
         _votedTrackIds.add(trackId);
         _errorMessage = 'Unable to remove vote. Please try again.';
         notifyListeners();
+      } finally {
+        _voteRequestsInFlight.remove(trackId);
       }
       return;
     }
 
+    _voteRequestsInFlight.add(trackId);
     _votedTrackIds.add(trackId);
     _votePulseTokens.update(trackId, (value) => value + 1, ifAbsent: () => 1);
     notifyListeners();
@@ -142,6 +153,8 @@ class SessionProvider extends ChangeNotifier {
       _votedTrackIds.remove(trackId);
       _errorMessage = 'Unable to register vote. Please try again.';
       notifyListeners();
+    } finally {
+      _voteRequestsInFlight.remove(trackId);
     }
   }
 
@@ -269,7 +282,7 @@ class SessionProvider extends ChangeNotifier {
         return 'Permission denied. Please sign in again.';
       }
       if (error.message != null && error.message!.trim().isNotEmpty) {
-      return error.message!.trim();
+        return error.message!.trim();
       }
     }
     return error.toString();
