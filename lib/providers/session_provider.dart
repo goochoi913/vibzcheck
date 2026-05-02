@@ -14,16 +14,24 @@ class SessionProvider extends ChangeNotifier {
 
   SessionModel? _currentSession;
   List<TrackModel> _tracks = const [];
+  final Set<String> _votedTrackIds = <String>{};
+  final Map<String, int> _votePulseTokens = <String, int>{};
+
   bool _isLoading = false;
   String? _errorMessage;
+  String? _currentUserUID;
+  bool _isRefreshingVotes = false;
 
   StreamSubscription<SessionModel>? _sessionSubscription;
   StreamSubscription<List<TrackModel>>? _tracksSubscription;
 
   SessionModel? get currentSession => _currentSession;
   List<TrackModel> get tracks => _tracks;
+  Set<String> get votedTrackIds => Set<String>.unmodifiable(_votedTrackIds);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  int votePulseTokenForTrack(String trackId) => _votePulseTokens[trackId] ?? 0;
 
   Future<void> createSession({
     required String sessionName,
@@ -31,6 +39,8 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     _errorMessage = null;
+    _currentUserUID = hostUID;
+
     try {
       final session = await _firestoreService.createSession(
         sessionName: sessionName,
@@ -51,6 +61,8 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     _errorMessage = null;
+    _currentUserUID = userUID;
+
     try {
       await _firestoreService.joinSession(
         sessionId: sessionId,
@@ -69,7 +81,10 @@ class SessionProvider extends ChangeNotifier {
     await _cancelSubscriptions();
     _currentSession = null;
     _tracks = const [];
+    _votedTrackIds.clear();
+    _votePulseTokens.clear();
     _errorMessage = null;
+    _currentUserUID = null;
     notifyListeners();
   }
 
@@ -81,6 +96,27 @@ class SessionProvider extends ChangeNotifier {
     if (sessionId == null) return;
 
     _errorMessage = null;
+
+    if (_votedTrackIds.contains(trackId)) {
+      _votedTrackIds.remove(trackId);
+      notifyListeners();
+
+      try {
+        await _firestoreService.removeVote(
+          sessionId: sessionId,
+          trackId: trackId,
+          voterUID: voterUID,
+        );
+      } catch (_) {
+        _votedTrackIds.add(trackId);
+        _errorMessage = 'Unable to remove vote. Please try again.';
+        notifyListeners();
+      }
+      return;
+    }
+
+    _votedTrackIds.add(trackId);
+    _votePulseTokens.update(trackId, (value) => value + 1, ifAbsent: () => 1);
     notifyListeners();
 
     try {
@@ -90,32 +126,12 @@ class SessionProvider extends ChangeNotifier {
         voterUID: voterUID,
       );
     } on AlreadyVotedException catch (error) {
+      _votedTrackIds.remove(trackId);
       _errorMessage = error.message;
       notifyListeners();
-    } catch (error) {
+    } catch (_) {
+      _votedTrackIds.remove(trackId);
       _errorMessage = 'Unable to register vote. Please try again.';
-      notifyListeners();
-    }
-  }
-
-  Future<void> removeVote({
-    required String trackId,
-    required String voterUID,
-  }) async {
-    final sessionId = _currentSession?.sessionId;
-    if (sessionId == null) return;
-
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _firestoreService.removeVote(
-        sessionId: sessionId,
-        trackId: trackId,
-        voterUID: voterUID,
-      );
-    } catch (error) {
-      _errorMessage = 'Unable to remove vote. Please try again.';
       notifyListeners();
     }
   }
@@ -142,12 +158,59 @@ class SessionProvider extends ChangeNotifier {
           (tracks) {
             _tracks = tracks;
             notifyListeners();
+            unawaited(_refreshVotedTrackIdsForCurrentUser());
           },
           onError: (error) {
             _errorMessage = error.toString();
             notifyListeners();
           },
         );
+
+    await _refreshVotedTrackIdsForCurrentUser();
+  }
+
+  Future<void> _refreshVotedTrackIdsForCurrentUser() async {
+    final sessionId = _currentSession?.sessionId;
+    final currentUserUID = _currentUserUID;
+
+    if (sessionId == null || currentUserUID == null || _tracks.isEmpty) {
+      if (_votedTrackIds.isNotEmpty) {
+        _votedTrackIds.clear();
+        notifyListeners();
+      }
+      return;
+    }
+
+    if (_isRefreshingVotes) return;
+    _isRefreshingVotes = true;
+
+    try {
+      final checks = await Future.wait(
+        _tracks.map(
+          (track) => _firestoreService.hasUserVotedOnTrack(
+            sessionId: sessionId,
+            trackId: track.trackId,
+            voterUID: currentUserUID,
+          ),
+        ),
+      );
+
+      final refreshed = <String>{};
+      for (var i = 0; i < _tracks.length; i++) {
+        if (checks[i]) {
+          refreshed.add(_tracks[i].trackId);
+        }
+      }
+
+      if (!setEquals(refreshed, _votedTrackIds)) {
+        _votedTrackIds
+          ..clear()
+          ..addAll(refreshed);
+        notifyListeners();
+      }
+    } finally {
+      _isRefreshingVotes = false;
+    }
   }
 
   Future<void> _cancelSubscriptions() async {

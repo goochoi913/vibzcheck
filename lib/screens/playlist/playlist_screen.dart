@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../firebase/firestore_service.dart';
+import '../../models/track_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/session_provider.dart';
@@ -28,20 +29,7 @@ class PlaylistScreen extends StatelessWidget {
 
     final currentUser = context.watch<AuthProvider>().currentUser;
     final isHost = currentUser?.uid == session.hostUID;
-
-    if (isHost) {
-      return _HostPlaylistView();
-    }
-
-    return _CollaboratorPlaylistView();
-  }
-}
-
-class _HostPlaylistView extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final sessionProvider = context.watch<SessionProvider>();
-    final session = sessionProvider.currentSession!;
+    final userUID = currentUser?.uid;
 
     return Scaffold(
       appBar: AppBar(
@@ -54,14 +42,32 @@ class _HostPlaylistView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(session.sessionName),
-            Text(
-              'Collaborators: ${session.collaborators.length}',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
+            if (isHost)
+              Text(
+                'Collaborators: ${session.collaborators.length}',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                ),
+              )
+            else
+              FutureBuilder<UserModel?>(
+                future: FirestoreService.instance.getUser(session.hostUID),
+                builder: (context, snapshot) {
+                  final hostName = snapshot.data?.displayName.isNotEmpty == true
+                      ? snapshot.data!.displayName
+                      : session.hostUID;
+                  return Text(
+                    'Hosted by $hostName',
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                    ),
+                  );
+                },
               ),
-            ),
           ],
         ),
         actions: [
@@ -84,110 +90,90 @@ class _HostPlaylistView extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text('Add Song'),
       ),
-      body: StreamBuilder<List<dynamic>>(
-        stream: Stream<List<dynamic>>.value(sessionProvider.tracks),
-        builder: (context, snapshot) {
-          final tracks = sessionProvider.tracks;
-
-          if (tracks.isEmpty) {
-            return const Center(
-              child: Text('No tracks yet. Tap Add Song to build your queue.'),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(14),
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TrackCard(
-                  track: track,
-                  isHost: true,
-                  currentVoteCount: track.voteCount,
-                  onVote: () {},
-                  onDelete: () {
-                    FirestoreService.instance.deleteTrack(
-                      sessionId: session.sessionId,
-                      trackId: track.trackId,
-                    );
-                  },
-                ),
-              );
-            },
-          );
-        },
+      body: Column(
+        children: [
+          if (sessionProvider.errorMessage != null)
+            Container(
+              width: double.infinity,
+              color: Colors.red.withValues(alpha: 0.12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Text(
+                sessionProvider.errorMessage!,
+                style: TextStyle(color: Colors.red.shade200),
+              ),
+            ),
+          Expanded(
+            child: _TrackList(
+              tracks: sessionProvider.tracks,
+              isHost: isHost,
+              votedTrackIds: sessionProvider.votedTrackIds,
+              votePulseTokenForTrack: sessionProvider.votePulseTokenForTrack,
+              onVote: (track) {
+                if (userUID == null) return;
+                sessionProvider.voteOnTrack(
+                  trackId: track.trackId,
+                  voterUID: userUID,
+                );
+              },
+              onDelete: (track) {
+                FirestoreService.instance.deleteTrack(
+                  sessionId: session.sessionId,
+                  trackId: track.trackId,
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CollaboratorPlaylistView extends StatelessWidget {
+class _TrackList extends StatelessWidget {
+  const _TrackList({
+    required this.tracks,
+    required this.isHost,
+    required this.votedTrackIds,
+    required this.votePulseTokenForTrack,
+    required this.onVote,
+    required this.onDelete,
+  });
+
+  final List<TrackModel> tracks;
+  final bool isHost;
+  final Set<String> votedTrackIds;
+  final int Function(String trackId) votePulseTokenForTrack;
+  final ValueChanged<TrackModel> onVote;
+  final ValueChanged<TrackModel> onDelete;
+
   @override
   Widget build(BuildContext context) {
-    final sessionProvider = context.watch<SessionProvider>();
-    final session = sessionProvider.currentSession!;
-    final voterUID = context.watch<AuthProvider>().currentUser?.uid;
+    if (tracks.isEmpty) {
+      return const Center(
+        child: Text('No tracks yet. Tap Add Song to build your queue.'),
+      );
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(session.sessionName),
-            FutureBuilder<UserModel?>(
-              future: FirestoreService.instance.getUser(session.hostUID),
-              builder: (context, snapshot) {
-                final hostName = snapshot.data?.displayName.isNotEmpty == true
-                    ? snapshot.data!.displayName
-                    : session.hostUID;
-                return Text(
-                  'Hosted by $hostName',
-                  style: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          SpotifySearchSheet.show(
-            context: context,
-            sessionId: session.sessionId,
-            onTrackSelected: (track) {},
-          );
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add Song'),
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(14),
-        itemCount: sessionProvider.tracks.length,
-        itemBuilder: (context, index) {
-          final track = sessionProvider.tracks[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: TrackCard(
-              track: track,
-              isHost: false,
-              currentVoteCount: track.voteCount,
-              onVote: () {
-                if (voterUID == null) return;
-                sessionProvider.voteOnTrack(
-                  trackId: track.trackId,
-                  voterUID: voterUID,
-                );
-              },
-            ),
-          );
-        },
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: tracks.length,
+      itemBuilder: (context, index) {
+        final track = tracks[index];
+        final hasVoted = votedTrackIds.contains(track.trackId);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TrackCard(
+            track: track,
+            isHost: isHost,
+            currentVoteCount: track.voteCount,
+            hasVoted: hasVoted,
+            votePulseToken: votePulseTokenForTrack(track.trackId),
+            onVote: () => onVote(track),
+            onDelete: isHost ? () => onDelete(track) : null,
+          ),
+        );
+      },
     );
   }
 }
