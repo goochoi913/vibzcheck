@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../firebase/firestore_service.dart';
@@ -53,7 +54,7 @@ class SessionProvider extends ChangeNotifier {
       );
       await _listenToSession(session.sessionId);
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = _friendlyError(error);
       notifyListeners();
     } finally {
       _setLoading(false);
@@ -75,7 +76,7 @@ class SessionProvider extends ChangeNotifier {
       );
       await _listenToSession(sessionId);
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = _friendlyError(error);
       notifyListeners();
     } finally {
       _setLoading(false);
@@ -167,8 +168,11 @@ class SessionProvider extends ChangeNotifier {
         .getTracksStream(sessionId)
         .listen(
           (tracks) {
-            final previousTrackIds = _tracks.map((track) => track.trackId).toSet();
-            if (_hasReceivedInitialTrackSnapshot && tracks.length > _tracks.length) {
+            final previousTrackIds = _tracks
+                .map((track) => track.trackId)
+                .toSet();
+            if (_hasReceivedInitialTrackSnapshot &&
+                tracks.length > _tracks.length) {
               final newlyAdded = tracks.where(
                 (track) => !previousTrackIds.contains(track.trackId),
               );
@@ -251,6 +255,21 @@ class SessionProvider extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  String _friendlyError(Object error) {
+    if (error is FirebaseException) {
+      if (error.code == 'unavailable') {
+        return 'Network temporarily unavailable. Please retry in a moment.';
+      }
+      if (error.code == 'permission-denied') {
+        return 'Permission denied. Please sign in again.';
+      }
+      if (error.message != null && error.message!.trim().isNotEmpty) {
+        return error.message!.trim();
+      }
+    }
+    return error.toString();
   }
 
   @override

@@ -65,18 +65,31 @@ class FirestoreService {
     required String userUID,
   }) async {
     final ref = sessionsRef().doc(sessionId);
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(ref);
-      if (!snapshot.exists) {
-        throw FirebaseException(
-          plugin: 'cloud_firestore',
-          message: 'Session not found.',
-        );
+    var attempt = 0;
+
+    while (true) {
+      try {
+        await _firestore.runTransaction((transaction) async {
+          final snapshot = await transaction.get(ref);
+          if (!snapshot.exists) {
+            throw FirebaseException(
+              plugin: 'cloud_firestore',
+              message: 'Session not found.',
+            );
+          }
+          transaction.update(ref, {
+            'collaborators': FieldValue.arrayUnion([userUID]),
+          });
+        });
+        return;
+      } on FirebaseException catch (error) {
+        final isRetryable =
+            error.code == 'unavailable' || error.code == 'aborted';
+        if (!isRetryable || attempt >= 2) rethrow;
+        attempt += 1;
+        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
       }
-      transaction.update(ref, {
-        'collaborators': FieldValue.arrayUnion([userUID]),
-      });
-    });
+    }
   }
 
   Stream<SessionModel> getSession(String sessionId) {
@@ -113,16 +126,27 @@ class FirestoreService {
     await ref.set(trackToSave.toMap());
   }
 
-  Stream<List<TrackModel>> getTracksStream(String sessionId) {
-    return tracksRef(sessionId)
-        .orderBy('voteCount', descending: true)
-        .orderBy('addedAt')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => TrackModel.fromMap(doc.data(), trackId: doc.id))
-              .toList(),
-        );
+  Stream<List<TrackModel>> getTracksStream(
+    String sessionId, {
+    int limit = 50,
+    TrackModel? startAfterTrack,
+  }) {
+    Query<Map<String, dynamic>> query = tracksRef(
+      sessionId,
+    ).orderBy('voteCount', descending: true).orderBy('addedAt').limit(limit);
+
+    if (startAfterTrack != null) {
+      query = query.startAfter([
+        startAfterTrack.voteCount,
+        Timestamp.fromDate(startAfterTrack.addedAt),
+      ]);
+    }
+
+    return query.snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => TrackModel.fromMap(doc.data(), trackId: doc.id))
+          .toList(),
+    );
   }
 
   Future<void> deleteTrack({

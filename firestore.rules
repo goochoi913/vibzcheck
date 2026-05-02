@@ -43,6 +43,12 @@ service cloud.firestore {
           isSessionCollaborator(sessionId) ||
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['voteCount'])
         );
+
+        match /votes/{voteUserId} {
+          allow read: if isSignedIn();
+          allow create, delete: if isSignedIn() && request.auth.uid == voteUserId;
+          allow update: if false;
+        }
       }
 
       match /messages/{messageId} {

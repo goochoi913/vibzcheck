@@ -139,7 +139,10 @@ class _LobbyViewState extends State<_LobbyView> {
     controller.dispose();
     if (!mounted || currentUser == null || sessionId == null) return;
 
-    await sessionProvider.joinSession(sessionId: sessionId, userUID: currentUser.uid);
+    await sessionProvider.joinSession(
+      sessionId: sessionId,
+      userUID: currentUser.uid,
+    );
 
     if (!mounted) return;
     final error = sessionProvider.errorMessage;
@@ -241,6 +244,7 @@ class _LobbyViewState extends State<_LobbyView> {
                     itemBuilder: (context, index) {
                       final session = filtered[index];
                       return _SessionCard(
+                        key: ValueKey<String>(session.sessionId),
                         session: session,
                         currentUser: currentUser,
                         isLoading: sessionProvider.isLoading,
@@ -267,8 +271,9 @@ class _LobbyViewState extends State<_LobbyView> {
   }
 }
 
-class _SessionCard extends StatelessWidget {
+class _SessionCard extends StatefulWidget {
   const _SessionCard({
+    super.key,
     required this.session,
     required this.currentUser,
     required this.isLoading,
@@ -279,6 +284,27 @@ class _SessionCard extends StatelessWidget {
   final bool isLoading;
 
   @override
+  State<_SessionCard> createState() => _SessionCardState();
+}
+
+class _SessionCardState extends State<_SessionCard> {
+  late Future<UserModel?> _hostFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _hostFuture = FirestoreService.instance.getUser(widget.session.hostUID);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SessionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.hostUID != widget.session.hostUID) {
+      _hostFuture = FirestoreService.instance.getUser(widget.session.hostUID);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
@@ -287,16 +313,16 @@ class _SessionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              session.sessionName,
+              widget.session.sessionName,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             FutureBuilder<UserModel?>(
-              future: FirestoreService.instance.getUser(session.hostUID),
+              future: _hostFuture,
               builder: (context, snapshot) {
                 final hostName = snapshot.data?.displayName.isNotEmpty == true
                     ? snapshot.data!.displayName
-                    : 'Host: ${session.hostUID.substring(0, 6)}...';
+                    : 'Host: ${widget.session.hostUID.substring(0, 6)}...';
                 return Text(
                   hostName,
                   style: TextStyle(color: Colors.grey.shade400),
@@ -306,15 +332,15 @@ class _SessionCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Text('Collaborators: ${session.collaborators.length}'),
+                Text('Collaborators: ${widget.session.collaborators.length}'),
                 const Spacer(),
                 FilledButton(
-                  onPressed: (currentUser == null || isLoading)
+                  onPressed: (widget.currentUser == null || widget.isLoading)
                       ? null
                       : () async {
                           await context.read<SessionProvider>().joinSession(
-                            sessionId: session.sessionId,
-                            userUID: currentUser!.uid,
+                            sessionId: widget.session.sessionId,
+                            userUID: widget.currentUser!.uid,
                           );
                         },
                   child: const Text('Join'),
@@ -328,15 +354,36 @@ class _SessionCard extends StatelessWidget {
   }
 }
 
-class _ActiveSessionView extends StatelessWidget {
+class _ActiveSessionView extends StatefulWidget {
   const _ActiveSessionView({required this.session, required this.currentUser});
 
   final SessionModel session;
   final UserModel? currentUser;
 
   @override
+  State<_ActiveSessionView> createState() => _ActiveSessionViewState();
+}
+
+class _ActiveSessionViewState extends State<_ActiveSessionView> {
+  late Future<UserModel?> _hostFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _hostFuture = FirestoreService.instance.getUser(widget.session.hostUID);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ActiveSessionView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.hostUID != widget.session.hostUID) {
+      _hostFuture = FirestoreService.instance.getUser(widget.session.hostUID);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isHost = currentUser?.uid == session.hostUID;
+    final isHost = widget.currentUser?.uid == widget.session.hostUID;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Active Session')),
@@ -346,16 +393,16 @@ class _ActiveSessionView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              session.sessionName,
+              widget.session.sessionName,
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             FutureBuilder<UserModel?>(
-              future: FirestoreService.instance.getUser(session.hostUID),
+              future: _hostFuture,
               builder: (context, snapshot) {
                 final hostName = snapshot.data?.displayName.isNotEmpty == true
                     ? snapshot.data!.displayName
-                    : session.hostUID;
+                    : widget.session.hostUID;
                 return Text(
                   'Host: $hostName',
                   style: TextStyle(color: Colors.grey.shade400),
@@ -394,7 +441,7 @@ class _ActiveSessionView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            Text('Collaborators: ${session.collaborators.length}'),
+            Text('Collaborators: ${widget.session.collaborators.length}'),
             const SizedBox(height: 8),
             Consumer<SessionProvider>(
               builder: (context, provider, child) {
