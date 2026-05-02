@@ -1,1 +1,43 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"vibzcheck-4bc2b","appId":"1:463541121421:android:f5111bdefb67fedd238dc4","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"vibzcheck-4bc2b","configurations":{"android":"1:463541121421:android:f5111bdefb67fedd238dc4"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "vibzcheck-4bc2b",
+          "appId": "1:463541121421:android:f5111bdefb67fedd238dc4",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "vibzcheck-4bc2b",
+          "configurations": {
+            "android": "1:463541121421:android:f5111bdefb67fedd238dc4"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npx --prefix \"$RESOURCE_DIR\" tsc -p \"$RESOURCE_DIR\""
+      ]
+    }
+  ]
+}
