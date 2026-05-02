@@ -7,6 +7,7 @@ import '../../models/track_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/session_provider.dart';
+import '../../widgets/mood_tag_editor_sheet.dart';
 import '../../widgets/spotify_search_sheet.dart';
 import '../../widgets/track_card.dart';
 
@@ -121,10 +122,38 @@ class PlaylistScreen extends StatelessWidget {
                   trackId: track.trackId,
                 );
               },
+              onEditMoodTags: isHost
+                  ? (track) => _showMoodTagEditor(
+                      context: context,
+                      sessionId: session.sessionId,
+                      track: track,
+                    )
+                  : null,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showMoodTagEditor({
+    required BuildContext context,
+    required String sessionId,
+    required TrackModel track,
+  }) async {
+    final tags = await MoodTagEditorSheet.show(
+      context: context,
+      initialTags: track.moodTags,
+      title: 'Edit Mood Tags',
+      confirmLabel: 'Save Tags',
+    );
+
+    if (tags == null) return;
+
+    await FirestoreService.instance.updateTrackMoodTags(
+      sessionId: sessionId,
+      trackId: track.trackId,
+      moodTags: tags,
     );
   }
 }
@@ -137,6 +166,7 @@ class _AnimatedTrackList extends StatelessWidget {
     required this.votePulseTokenForTrack,
     required this.onVote,
     required this.onDelete,
+    this.onEditMoodTags,
   });
 
   final List<TrackModel> tracks;
@@ -145,6 +175,7 @@ class _AnimatedTrackList extends StatelessWidget {
   final int Function(String trackId) votePulseTokenForTrack;
   final ValueChanged<TrackModel> onVote;
   final ValueChanged<TrackModel> onDelete;
+  final ValueChanged<TrackModel>? onEditMoodTags;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +229,9 @@ class _AnimatedTrackList extends StatelessWidget {
                 votePulseToken: votePulseTokenForTrack(track.trackId),
                 onVote: () => onVote(track),
                 onDelete: isHost ? () => onDelete(track) : null,
+                onLongPress: isHost && onEditMoodTags != null
+                    ? () => onEditMoodTags!(track)
+                    : null,
               ),
             ),
           );

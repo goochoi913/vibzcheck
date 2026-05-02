@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../firebase/firestore_service.dart';
 import '../models/track_model.dart';
 import '../providers/auth_provider.dart';
+import '../utils/mood_tags.dart';
 
 class SpotifySearchSheet extends StatefulWidget {
   const SpotifySearchSheet({
@@ -48,6 +49,9 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
   List<_SpotifyResult> _results = const [];
   bool _isLoading = false;
   String? _errorMessage;
+
+  _SpotifyResult? _pendingSelection;
+  final Set<String> _selectedMoodTags = <String>{};
 
   @override
   void dispose() {
@@ -91,6 +95,8 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
           ? raw
           : (raw is Map<String, dynamic> && raw['tracks'] is List)
           ? raw['tracks'] as List
+          : (raw is Map<String, dynamic> && raw['result'] is List)
+          ? raw['result'] as List
           : const [];
 
       final parsed = rawItems
@@ -114,19 +120,37 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
     }
   }
 
-  Future<void> _selectTrack(_SpotifyResult result) async {
+  void _startMoodStep(_SpotifyResult result) {
+    setState(() {
+      _pendingSelection = result;
+      _selectedMoodTags.clear();
+    });
+  }
+
+  void _toggleMoodTag(String tag) {
+    setState(() {
+      if (_selectedMoodTags.contains(tag)) {
+        _selectedMoodTags.remove(tag);
+      } else {
+        _selectedMoodTags.add(tag);
+      }
+    });
+  }
+
+  Future<void> _saveTrackWithMoodTags() async {
     final currentUser = context.read<AuthProvider>().currentUser;
-    if (currentUser == null) return;
+    final selected = _pendingSelection;
+    if (currentUser == null || selected == null) return;
 
     final track = TrackModel(
       trackId: '',
-      spotifyTrackId: result.trackId,
-      trackName: result.trackName,
-      artistName: result.artistName,
-      albumArt: result.albumArtUrl,
+      spotifyTrackId: selected.trackId,
+      trackName: selected.trackName,
+      artistName: selected.artistName,
+      albumArt: selected.albumArtUrl,
       addedByUID: currentUser.uid,
       voteCount: 0,
-      moodTags: const [],
+      moodTags: _selectedMoodTags.toList(),
       addedAt: DateTime.now(),
     );
 
@@ -153,101 +177,181 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
             color: Theme.of(context).scaffoldBackgroundColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade500,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: _onQueryChanged,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Search Spotify tracks',
-                    prefixIcon: Icon(Icons.search),
+          child: _pendingSelection == null
+              ? _buildSearchStep(scrollController)
+              : _buildMoodStep(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchStep(ScrollController scrollController) {
+    return Column(
+      children: [
+        const SizedBox(height: 10),
+        Container(
+          width: 42,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade500,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onQueryChanged,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Search Spotify tracks',
+              prefixIcon: Icon(Icons.search),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Search failed: $_errorMessage',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _errorMessage != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Text(
-                            'Search failed: $_errorMessage',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                    : _results.isEmpty
-                    ? const Center(
-                        child: Text('Start typing to search for songs.'),
-                      )
-                    : ListView.separated(
-                        controller: scrollController,
-                        itemCount: _results.length,
-                        separatorBuilder: (context, index) =>
-                            const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final item = _results[index];
-                          return ListTile(
-                            onTap: () => _selectTrack(item),
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: CachedNetworkImage(
-                                  imageUrl: item.albumArtUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: Colors.white12,
-                                    alignment: Alignment.center,
-                                    child: const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                        color: Colors.white12,
-                                        alignment: Alignment.center,
-                                        child: const Icon(Icons.music_note),
-                                      ),
+                )
+              : _results.isEmpty
+              ? const Center(child: Text('Start typing to search for songs.'))
+              : ListView.separated(
+                  controller: scrollController,
+                  itemCount: _results.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _results[index];
+                    return ListTile(
+                      onTap: () => _startMoodStep(item),
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CachedNetworkImage(
+                            imageUrl: item.albumArtUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.white12,
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
                               ),
                             ),
-                            title: Text(
-                              item.trackName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.white12,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.music_note),
                             ),
-                            subtitle: Text(
-                              item.artistName,
-                              style: TextStyle(color: Colors.grey.shade400),
-                            ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
+                      title: Text(
+                        item.trackName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        item.artistName,
+                        style: TextStyle(color: Colors.grey.shade400),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMoodStep() {
+    final selected = _pendingSelection;
+    if (selected == null) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _pendingSelection = null;
+                    _selectedMoodTags.clear();
+                  });
+                },
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 4),
+              const Expanded(
+                child: Text(
+                  'Tag this track',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          Text(
+            selected.trackName,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            selected.artistName,
+            style: TextStyle(color: Colors.grey.shade400),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kMoodTagOptions.map((tag) {
+              final selected = _selectedMoodTags.contains(tag);
+              return FilterChip(
+                label: Text(tag),
+                selected: selected,
+                onSelected: (_) => _toggleMoodTag(tag),
+                selectedColor: colorScheme.primary.withValues(alpha: 0.95),
+                checkmarkColor: colorScheme.onPrimary,
+                labelStyle: TextStyle(
+                  color: selected
+                      ? colorScheme.onPrimary
+                      : Colors.grey.shade200,
+                  fontWeight: FontWeight.w600,
+                ),
+                side: BorderSide(
+                  color: selected
+                      ? colorScheme.primary
+                      : Colors.white.withValues(alpha: 0.35),
+                ),
+                backgroundColor: Colors.transparent,
+              );
+            }).toList(),
+          ),
+          const Spacer(),
+          FilledButton(
+            onPressed: _saveTrackWithMoodTags,
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 }
