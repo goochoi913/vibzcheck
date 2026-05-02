@@ -49,7 +49,7 @@ class _AuthGate extends StatelessWidget {
           );
         }
 
-        if (authProvider.isAuthenticated) {
+        if (authProvider.isLoggedIn) {
           return const MainNavigation();
         }
 
