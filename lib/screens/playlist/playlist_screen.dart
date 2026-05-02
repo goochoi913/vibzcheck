@@ -103,7 +103,7 @@ class PlaylistScreen extends StatelessWidget {
               ),
             ),
           Expanded(
-            child: _TrackList(
+            child: _AnimatedTrackList(
               tracks: sessionProvider.tracks,
               isHost: isHost,
               votedTrackIds: sessionProvider.votedTrackIds,
@@ -129,8 +129,8 @@ class PlaylistScreen extends StatelessWidget {
   }
 }
 
-class _TrackList extends StatelessWidget {
-  const _TrackList({
+class _AnimatedTrackList extends StatelessWidget {
+  const _AnimatedTrackList({
     required this.tracks,
     required this.isHost,
     required this.votedTrackIds,
@@ -154,26 +154,55 @@ class _TrackList extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(14),
-      itemCount: tracks.length,
-      itemBuilder: (context, index) {
-        final track = tracks[index];
-        final hasVoted = votedTrackIds.contains(track.trackId);
+    final signature = tracks
+        .map((track) => '${track.trackId}:${track.voteCount}')
+        .join('|');
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: TrackCard(
-            track: track,
-            isHost: isHost,
-            currentVoteCount: track.voteCount,
-            hasVoted: hasVoted,
-            votePulseToken: votePulseTokenForTrack(track.trackId),
-            onVote: () => onVote(track),
-            onDelete: isHost ? () => onDelete(track) : null,
-          ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      transitionBuilder: (child, animation) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0, 0.06),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: slide, child: child),
         );
       },
+      child: ListView.builder(
+        key: ValueKey<String>(signature),
+        padding: const EdgeInsets.all(14),
+        itemCount: tracks.length,
+        itemBuilder: (context, index) {
+          final track = tracks[index];
+          final hasVoted = votedTrackIds.contains(track.trackId);
+
+          return TweenAnimationBuilder<double>(
+            key: ValueKey<String>('${track.trackId}-${track.voteCount}'),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            tween: Tween<double>(begin: 0.5, end: 1),
+            builder: (context, opacity, child) {
+              return Opacity(opacity: opacity, child: child);
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TrackCard(
+                track: track,
+                isHost: isHost,
+                currentVoteCount: track.voteCount,
+                hasVoted: hasVoted,
+                votePulseToken: votePulseTokenForTrack(track.trackId),
+                onVote: () => onVote(track),
+                onDelete: isHost ? () => onDelete(track) : null,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
