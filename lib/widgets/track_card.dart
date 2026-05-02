@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/track_model.dart';
+import 'preview_play_button.dart';
 import 'vote_button.dart';
 
 class TrackCard extends StatelessWidget {
@@ -74,6 +75,11 @@ class TrackCard extends StatelessWidget {
                 Text(
                   track.artistName,
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                PreviewPlayButton(
+                  trackId: track.trackId,
+                  previewUrl: track.previewUrl,
                 ),
                 if (track.moodTags.isNotEmpty) ...[
                   const SizedBox(height: 8),

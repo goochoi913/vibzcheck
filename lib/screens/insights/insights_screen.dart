@@ -115,6 +115,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
       trackName: item.trackName,
       artistName: item.artistName,
       albumArt: item.albumArtUrl,
+      previewUrl: item.previewUrl,
       addedByUID: currentUser.uid,
       voteCount: 0,
       moodTags: const <String>[],

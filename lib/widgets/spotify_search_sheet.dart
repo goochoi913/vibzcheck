@@ -155,6 +155,7 @@ class _SpotifySearchSheetState extends State<SpotifySearchSheet> {
       trackName: selected.trackName,
       artistName: selected.artistName,
       albumArt: selected.albumArtUrl,
+      previewUrl: selected.previewUrl,
       addedByUID: currentUser.uid,
       voteCount: 0,
       moodTags: _selectedMoodTags.toList(),

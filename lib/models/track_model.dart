@@ -7,6 +7,7 @@ class TrackModel {
     required this.trackName,
     required this.artistName,
     required this.albumArt,
+    this.previewUrl,
     required this.addedByUID,
     this.voteCount = 0,
     required this.moodTags,
@@ -18,6 +19,7 @@ class TrackModel {
   final String trackName;
   final String artistName;
   final String albumArt;
+  final String? previewUrl;
   final String addedByUID;
   final int voteCount;
   final List<String> moodTags;
@@ -33,6 +35,7 @@ class TrackModel {
       trackName: (map['trackName'] as String?) ?? '',
       artistName: (map['artistName'] as String?) ?? '',
       albumArt: (map['albumArt'] as String?) ?? '',
+      previewUrl: map['previewUrl'] as String?,
       addedByUID: (map['addedByUID'] as String?) ?? '',
       voteCount: (map['voteCount'] as int?) ?? 0,
       moodTags: List<String>.from(map['moodTags'] as List? ?? const []),
@@ -46,6 +49,7 @@ class TrackModel {
       'trackName': trackName,
       'artistName': artistName,
       'albumArt': albumArt,
+      'previewUrl': previewUrl,
       'addedByUID': addedByUID,
       'voteCount': voteCount,
       'moodTags': moodTags,
@@ -59,6 +63,8 @@ class TrackModel {
     String? trackName,
     String? artistName,
     String? albumArt,
+    String? previewUrl,
+    bool clearPreviewUrl = false,
     String? addedByUID,
     int? voteCount,
     List<String>? moodTags,
@@ -70,6 +76,7 @@ class TrackModel {
       trackName: trackName ?? this.trackName,
       artistName: artistName ?? this.artistName,
       albumArt: albumArt ?? this.albumArt,
+      previewUrl: clearPreviewUrl ? null : (previewUrl ?? this.previewUrl),
       addedByUID: addedByUID ?? this.addedByUID,
       voteCount: voteCount ?? this.voteCount,
       moodTags: moodTags ?? this.moodTags,
