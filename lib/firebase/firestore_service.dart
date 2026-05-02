@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/message_model.dart';
 import '../models/session_model.dart';
 import '../models/track_model.dart';
 import '../models/user_model.dart';
@@ -217,5 +218,48 @@ class FirestoreService {
     return tracksRef(
       sessionId,
     ).doc(trackId).set({'moodTags': moodTags}, SetOptions(merge: true));
+  }
+
+  Future<void> sendMessage({
+    required String sessionId,
+    required String senderUID,
+    required String senderName,
+    required String text,
+  }) async {
+    final messageRef = messagesRef(sessionId).doc();
+    final message = MessageModel(
+      messageId: messageRef.id,
+      senderUID: senderUID,
+      senderName: senderName,
+      text: text.trim(),
+      reaction: null,
+      sentAt: DateTime.now(),
+    );
+
+    await messageRef.set(message.toMap());
+  }
+
+  Stream<List<MessageModel>> getMessagesStream(String sessionId) {
+    return messagesRef(sessionId)
+        .orderBy('sentAt')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => MessageModel.fromMap(doc.data(), messageId: doc.id),
+              )
+              .toList(),
+        );
+  }
+
+  Future<void> addReaction({
+    required String sessionId,
+    required String messageId,
+    required String reaction,
+  }) {
+    return messagesRef(sessionId).doc(messageId).set(
+      {'reaction': reaction},
+      SetOptions(merge: true),
+    );
   }
 }
