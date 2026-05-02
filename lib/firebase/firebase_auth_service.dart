@@ -34,13 +34,7 @@ class FirebaseAuthService {
 
     final uid = credential.user?.uid;
     if (uid != null) {
-      await _messaging.requestPermission(alert: true, badge: true, sound: true);
-      final token = await _messaging.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _firestoreService.userDoc(uid).set({
-          'fcmToken': token,
-        }, SetOptions(merge: true));
-      }
+      await _syncFcmTokenBestEffort(uid: uid);
     }
 
     return credential;
@@ -59,8 +53,9 @@ class FirebaseAuthService {
     await credential.user?.updateDisplayName(displayName);
 
     final uid = credential.user?.uid;
+    var token = '';
     if (uid != null) {
-      final token = await _messaging.getToken() ?? '';
+      token = await _getFcmTokenBestEffort();
       final newUser = UserModel(
         uid: uid,
         displayName: displayName,
@@ -77,4 +72,24 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() => _auth.signOut();
+
+  Future<void> _syncFcmTokenBestEffort({required String uid}) async {
+    final token = await _getFcmTokenBestEffort();
+    if (token.isEmpty) return;
+    await _firestoreService.userDoc(uid).set({
+      'fcmToken': token,
+    }, SetOptions(merge: true));
+  }
+
+  Future<String> _getFcmTokenBestEffort() async {
+    try {
+      await _messaging.requestPermission(alert: true, badge: true, sound: true);
+      return await _messaging.getToken() ?? '';
+    } on FirebaseException {
+      // App Check / network hiccups should not block sign-in.
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
 }

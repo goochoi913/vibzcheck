@@ -22,7 +22,7 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   late int _currentIndex;
 
-  static const List<Widget> _screens = [
+  late final List<Widget> _screens = const [
     HomeScreen(),
     PlaylistScreen(),
     ChatScreen(),
