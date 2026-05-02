@@ -25,22 +25,27 @@ class FirestoreService {
 
   final FirebaseFirestore _firestore;
 
+  /// Returns a reference to the `users/{uid}` profile document.
   DocumentReference<Map<String, dynamic>> userDoc(String uid) {
     return _firestore.collection('users').doc(uid);
   }
 
+  /// Returns the top-level `sessions` collection reference.
   CollectionReference<Map<String, dynamic>> sessionsRef() {
     return _firestore.collection('sessions');
   }
 
+  /// Returns the `sessions/{sessionId}/tracks` sub-collection reference.
   CollectionReference<Map<String, dynamic>> tracksRef(String sessionId) {
     return sessionsRef().doc(sessionId).collection('tracks');
   }
 
+  /// Returns the `sessions/{sessionId}/messages` sub-collection reference.
   CollectionReference<Map<String, dynamic>> messagesRef(String sessionId) {
     return sessionsRef().doc(sessionId).collection('messages');
   }
 
+  /// Creates a new session document with generated ID and host ownership metadata.
   Future<SessionModel> createSession({
     required String sessionName,
     required String hostUID,
@@ -60,6 +65,9 @@ class FirestoreService {
     return session;
   }
 
+  /// Adds a collaborator UID atomically using `arrayUnion` to prevent duplicates.
+  ///
+  /// Retries transient Firestore failures (`unavailable`, `aborted`) before surfacing an error.
   Future<void> joinSession({
     required String sessionId,
     required String userUID,
@@ -92,6 +100,7 @@ class FirestoreService {
     }
   }
 
+  /// Streams a single session document in real time from `sessions/{sessionId}`.
   Stream<SessionModel> getSession(String sessionId) {
     return sessionsRef().doc(sessionId).snapshots().map((snapshot) {
       final data = snapshot.data();
@@ -105,6 +114,7 @@ class FirestoreService {
     });
   }
 
+  /// Streams active sessions ordered by newest first for lobby discovery.
   Stream<List<SessionModel>> getActiveSessions() {
     return sessionsRef()
         .where('isActive', isEqualTo: true)
@@ -117,6 +127,7 @@ class FirestoreService {
         );
   }
 
+  /// Writes a new track document into `sessions/{sessionId}/tracks` with generated document ID.
   Future<void> addTrack({
     required String sessionId,
     required TrackModel track,
@@ -126,6 +137,9 @@ class FirestoreService {
     await ref.set(trackToSave.toMap());
   }
 
+  /// Streams queue tracks ordered by vote priority then insertion time.
+  ///
+  /// Supports pagination with `limit` and `startAfterTrack` cursor.
   Stream<List<TrackModel>> getTracksStream(
     String sessionId, {
     int limit = 50,
@@ -149,6 +163,7 @@ class FirestoreService {
     );
   }
 
+  /// Deletes one track document from `sessions/{sessionId}/tracks/{trackId}`.
   Future<void> deleteTrack({
     required String sessionId,
     required String trackId,
@@ -156,6 +171,9 @@ class FirestoreService {
     return tracksRef(sessionId).doc(trackId).delete();
   }
 
+  /// Registers a vote atomically and increments `voteCount` in the same transaction.
+  ///
+  /// Uses a per-user vote document guard to block duplicate votes.
   Future<void> voteOnTrack({
     required String sessionId,
     required String trackId,
@@ -186,6 +204,7 @@ class FirestoreService {
     });
   }
 
+  /// Removes a user's vote atomically and decrements `voteCount` if vote exists.
   Future<void> removeVote({
     required String sessionId,
     required String trackId,
@@ -213,6 +232,7 @@ class FirestoreService {
     });
   }
 
+  /// Checks whether `voterUID` already has a vote doc under a track's `votes` sub-collection.
   Future<bool> hasUserVotedOnTrack({
     required String sessionId,
     required String trackId,
@@ -224,6 +244,7 @@ class FirestoreService {
     return voteSnapshot.exists;
   }
 
+  /// Reads one user profile document and maps it to [UserModel].
   Future<UserModel?> getUser(String uid) async {
     final snapshot = await userDoc(uid).get();
     final data = snapshot.data();
@@ -231,10 +252,12 @@ class FirestoreService {
     return UserModel.fromMap(data, uid: snapshot.id);
   }
 
+  /// Upserts user profile fields into `users/{uid}` with merge semantics.
   Future<void> updateUser(UserModel user) {
     return userDoc(user.uid).set(user.toMap(), SetOptions(merge: true));
   }
 
+  /// Updates only `moodTags` for a track document using merge to avoid overwriting other fields.
   Future<void> updateTrackMoodTags({
     required String sessionId,
     required String trackId,
@@ -245,6 +268,7 @@ class FirestoreService {
     ).doc(trackId).set({'moodTags': moodTags}, SetOptions(merge: true));
   }
 
+  /// Aggregates user stats across sessions, tracks, and votes for profile insights.
   Future<UserStats> getUserStats(String userUID) async {
     final sessionsJoined = await _safeCount(
       sessionsRef().where('collaborators', arrayContains: userUID),
@@ -267,6 +291,7 @@ class FirestoreService {
     );
   }
 
+  /// Counts documents via aggregate query with fallback to snapshot length for compatibility.
   Future<int> _safeCount(Query<Map<String, dynamic>> query) async {
     try {
       final aggregate = await query.count().get();
@@ -277,6 +302,7 @@ class FirestoreService {
     }
   }
 
+  /// Creates a new chat message under `sessions/{sessionId}/messages` with generated message ID.
   Future<void> sendMessage({
     required String sessionId,
     required String senderUID,
@@ -296,6 +322,7 @@ class FirestoreService {
     await messageRef.set(message.toMap());
   }
 
+  /// Streams chat messages from `sessions/{sessionId}/messages` oldest-to-newest.
   Stream<List<MessageModel>> getMessagesStream(String sessionId) {
     return messagesRef(sessionId)
         .orderBy('sentAt')
@@ -307,6 +334,7 @@ class FirestoreService {
         );
   }
 
+  /// Writes/replaces a single emoji reaction field on a message document using merge semantics.
   Future<void> addReaction({
     required String sessionId,
     required String messageId,

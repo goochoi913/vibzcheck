@@ -164,6 +164,9 @@ class SessionProvider extends ChangeNotifier {
           },
         );
 
+    // We keep a second listener for the tracks sub-collection because session
+    // metadata and queue ordering change on different cadences and need
+    // independent real-time updates.
     _tracksSubscription = _firestoreService
         .getTracksStream(sessionId)
         .listen(
@@ -266,7 +269,7 @@ class SessionProvider extends ChangeNotifier {
         return 'Permission denied. Please sign in again.';
       }
       if (error.message != null && error.message!.trim().isNotEmpty) {
-        return error.message!.trim();
+      return error.message!.trim();
       }
     }
     return error.toString();
@@ -274,6 +277,8 @@ class SessionProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Both stream subscriptions are cancelled on dispose to avoid leaked
+    // listeners when provider scope is torn down or session state is reset.
     _sessionSubscription?.cancel();
     _tracksSubscription?.cancel();
     super.dispose();

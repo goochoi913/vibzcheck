@@ -185,6 +185,10 @@ class _AnimatedTrackList extends StatelessWidget {
       );
     }
 
+    // We derive a lightweight list signature from track IDs and vote counts so
+    // each stream emission that changes ordering/scores produces a new key.
+    // AnimatedSwitcher then transitions between old/new list states, creating
+    // a smooth visual reorder instead of a hard jump.
     final signature = tracks
         .map((track) => '${track.trackId}:${track.voteCount}')
         .join('|');
