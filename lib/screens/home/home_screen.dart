@@ -93,8 +93,11 @@ class _LobbyViewState extends State<_LobbyView> {
     final trimmedName = sessionName.trim();
     if (trimmedName.isEmpty) return;
 
-    // Let the dialog route fully settle before provider state changes.
-    await Future<void>.delayed(const Duration(milliseconds: 16));
+    // Wait for the dialog dismiss animation (~200 ms) before triggering
+    // provider state changes.  The 16 ms delay that was here previously was
+    // shorter than the animation, causing _dependents.isEmpty assertions.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
 
     await sessionProvider.createSession(
       sessionName: trimmedName,

@@ -41,11 +41,31 @@ class AuthProvider extends ChangeNotifier {
       final data = snapshot.data();
       if (data != null) {
         _currentUser = UserModel.fromMap(data, uid: snapshot.id);
+      } else {
+        // Firestore doc not written yet (race during sign-up) or missing —
+        // build a temporary model from Firebase Auth data so the user is logged in.
+        _currentUser = _buildUserFromFirebase(firebaseUser);
       }
     } catch (_) {
-      _currentUser = null;
+      // Network / permission error — keep the user logged in with Auth data.
+      _currentUser = _buildUserFromFirebase(firebaseUser);
     }
     notifyListeners();
+  }
+
+  UserModel _buildUserFromFirebase(User firebaseUser) {
+    return UserModel(
+      uid: firebaseUser.uid,
+      displayName:
+          (firebaseUser.displayName?.trim().isNotEmpty == true)
+              ? firebaseUser.displayName!
+              : (firebaseUser.email?.split('@').first ?? 'User'),
+      email: firebaseUser.email ?? '',
+      photoURL: firebaseUser.photoURL,
+      favoriteGenres: const [],
+      createdAt: DateTime.now(),
+      fcmToken: '',
+    );
   }
 
   Future<bool> register({
@@ -62,6 +82,14 @@ class AuthProvider extends ChangeNotifier {
         password: password,
         displayName: displayName,
       );
+      // signUpWithEmail has already written the Firestore user doc by the time
+      // it resolves. Force a state refresh so _currentUser is non-null
+      // immediately (the auth stream fires before the doc is written, so
+      // _handleAuthState runs before the doc exists without this call).
+      final firebaseUser = _authService.currentUser;
+      if (firebaseUser != null) {
+        await _handleAuthState(firebaseUser);
+      }
       return true;
     } catch (e) {
       _errorMessage = _parseAuthError(e);

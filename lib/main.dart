@@ -22,14 +22,20 @@ final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FirebaseAppCheck.instance.activate(
-    providerAndroid: kDebugMode
-        ? const AndroidDebugProvider()
-        : const AndroidPlayIntegrityProvider(),
-    providerApple: kDebugMode
-        ? const AppleDebugProvider()
-        : const AppleAppAttestWithDeviceCheckFallbackProvider(),
-  );
+  try {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kDebugMode
+          ? const AndroidDebugProvider()
+          : const AndroidPlayIntegrityProvider(),
+      providerApple: kDebugMode
+          ? const AppleDebugProvider()
+          : const AppleAppAttestWithDeviceCheckFallbackProvider(),
+    );
+  } catch (_) {
+    // App Check activation can fail on first launch or in network-restricted
+    // environments.  Auth still works with a placeholder token, so do not
+    // block app startup.
+  }
   runApp(const MyApp());
 }
 
