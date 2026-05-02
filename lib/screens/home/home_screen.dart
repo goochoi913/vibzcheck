@@ -17,7 +17,18 @@ class HomeScreen extends StatelessWidget {
     final authProvider = context.watch<AuthProvider>();
 
     if (sessionProvider.currentSession == null) {
-      return _LobbyView(currentUser: authProvider.currentUser);
+      // Pass isLoading and errorMessage down so _LobbyView does not need to
+      // watch SessionProvider itself.  This prevents the
+      // _dependents.isEmpty assertion: when notifyListeners() triggers
+      // HomeScreen to switch from _LobbyView to _ActiveSessionView, Flutter
+      // unmounts _LobbyView.  If _LobbyView had its own context.watch on
+      // SessionProvider, its element would still be registered as a dependent
+      // during that unmount, causing the race that fires the assertion.
+      return _LobbyView(
+        currentUser: authProvider.currentUser,
+        isSessionLoading: sessionProvider.isLoading,
+        sessionError: sessionProvider.errorMessage,
+      );
     }
 
     return _ActiveSessionView(
@@ -28,9 +39,15 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _LobbyView extends StatefulWidget {
-  const _LobbyView({required this.currentUser});
+  const _LobbyView({
+    required this.currentUser,
+    required this.isSessionLoading,
+    this.sessionError,
+  });
 
   final UserModel? currentUser;
+  final bool isSessionLoading;
+  final String? sessionError;
 
   @override
   State<_LobbyView> createState() => _LobbyViewState();
@@ -93,9 +110,8 @@ class _LobbyViewState extends State<_LobbyView> {
     final trimmedName = sessionName.trim();
     if (trimmedName.isEmpty) return;
 
-    // Wait for the dialog dismiss animation (~200 ms) before triggering
-    // provider state changes.  The 16 ms delay that was here previously was
-    // shorter than the animation, causing _dependents.isEmpty assertions.
+    // Wait for the dialog dismiss animation to complete before triggering
+    // provider state changes.
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
 
@@ -108,6 +124,7 @@ class _LobbyViewState extends State<_LobbyView> {
   Future<void> _showJoinWithRoomIdDialog(BuildContext context) async {
     final sessionProvider = context.read<SessionProvider>();
     final currentUser = widget.currentUser;
+    final messenger = ScaffoldMessenger.of(context);
     final controller = TextEditingController();
 
     final sessionId = await showDialog<String>(
@@ -142,6 +159,9 @@ class _LobbyViewState extends State<_LobbyView> {
     controller.dispose();
     if (!mounted || currentUser == null || sessionId == null) return;
 
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
     await sessionProvider.joinSession(
       sessionId: sessionId,
       userUID: currentUser.uid,
@@ -150,7 +170,7 @@ class _LobbyViewState extends State<_LobbyView> {
     if (!mounted) return;
     final error = sessionProvider.errorMessage;
     if (error != null && error.isNotEmpty) {
-      ScaffoldMessenger.of(this.context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           backgroundColor: Colors.red.shade700,
           content: Text('Unable to join room: $error'),
@@ -162,7 +182,6 @@ class _LobbyViewState extends State<_LobbyView> {
   @override
   Widget build(BuildContext context) {
     final currentUser = widget.currentUser;
-    final sessionProvider = context.watch<SessionProvider>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Join the Vibe')),
@@ -201,11 +220,11 @@ class _LobbyViewState extends State<_LobbyView> {
               ),
             ),
             const SizedBox(height: 14),
-            if (sessionProvider.errorMessage != null)
+            if (widget.sessionError != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  sessionProvider.errorMessage!,
+                  widget.sessionError!,
                   style: TextStyle(color: Colors.red.shade300),
                 ),
               ),
@@ -250,7 +269,7 @@ class _LobbyViewState extends State<_LobbyView> {
                         key: ValueKey<String>(session.sessionId),
                         session: session,
                         currentUser: currentUser,
-                        isLoading: sessionProvider.isLoading,
+                        isLoading: widget.isSessionLoading,
                       );
                     },
                   );
