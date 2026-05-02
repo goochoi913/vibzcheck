@@ -7,7 +7,9 @@ import '../profile/profile_screen.dart';
 import 'home_screen.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  const MainNavigation({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   static void switchToTab(BuildContext context, int index) {
     context.findAncestorStateOfType<_MainNavigationState>()?.switchToTab(index);
@@ -18,7 +20,7 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   static const List<Widget> _screens = [
     HomeScreen(),
@@ -27,6 +29,12 @@ class _MainNavigationState extends State<MainNavigation> {
     InsightsScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, _screens.length - 1);
+  }
 
   void switchToTab(int index) {
     if (index < 0 || index >= _screens.length) return;

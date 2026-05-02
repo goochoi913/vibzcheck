@@ -1,8 +1,10 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 
 const spotifyTokenUrl = "https://accounts.spotify.com/api/token";
 const spotifyApiBase = "https://api.spotify.com/v1";
@@ -332,5 +334,80 @@ export const getSpotifyTrackDetails = onCall(
       explicit: track.explicit,
       audioFeatures,
     };
+  },
+);
+
+export const notifySessionEvent = onDocumentCreated(
+  {
+    region: "us-central1",
+    document: "sessions/{sessionId}/tracks/{trackId}",
+  },
+  async (event) => {
+    const data = event.data?.data();
+    const sessionId = event.params.sessionId;
+    const trackId = event.params.trackId;
+
+    if (!data || !sessionId || !trackId) {
+      return;
+    }
+
+    const trackName = (data.trackName as string | undefined)?.trim() || "New Track";
+    const artistName =
+      (data.artistName as string | undefined)?.trim() || "Unknown Artist";
+
+    const sessionSnapshot = await db.collection("sessions").doc(sessionId).get();
+    if (!sessionSnapshot.exists) {
+      logger.warn("Session not found for notifySessionEvent", { sessionId, trackId });
+      return;
+    }
+
+    const sessionData = sessionSnapshot.data() ?? {};
+    const sessionName = (sessionData.sessionName as string | undefined)?.trim() || "session";
+    const collaborators = (sessionData.collaborators as string[] | undefined) ?? [];
+
+    if (collaborators.length === 0) {
+      return;
+    }
+
+    const userSnapshots = await Promise.all(
+      collaborators.map((uid) => db.collection("users").doc(uid).get()),
+    );
+
+    const tokens = new Set<string>();
+    for (const userSnapshot of userSnapshots) {
+      const token = userSnapshot.data()?.fcmToken as string | undefined;
+      if (token && token.trim().length > 0) {
+        tokens.add(token.trim());
+      }
+    }
+
+    if (tokens.size === 0) {
+      logger.info("No collaborator FCM tokens for session event", { sessionId, trackId });
+      return;
+    }
+
+    const response = await getMessaging().sendEachForMulticast({
+      tokens: [...tokens],
+      notification: {
+        title: "New Song Added",
+        body: `${trackName} by ${artistName} was added to ${sessionName}`,
+      },
+      data: {
+        sessionId,
+        trackId,
+        screen: "playlist",
+      },
+      android: {
+        priority: "high",
+      },
+    });
+
+    logger.info("notifySessionEvent completed", {
+      sessionId,
+      trackId,
+      tokenCount: tokens.size,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
   },
 );

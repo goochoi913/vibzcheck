@@ -34,9 +34,12 @@ class FirebaseAuthService {
 
     final uid = credential.user?.uid;
     if (uid != null) {
+      await _messaging.requestPermission(alert: true, badge: true, sound: true);
       final token = await _messaging.getToken();
       if (token != null && token.isNotEmpty) {
-        await _firestoreService.userDoc(uid).set({'fcmToken': token}, SetOptions(merge: true));
+        await _firestoreService.userDoc(uid).set({
+          'fcmToken': token,
+        }, SetOptions(merge: true));
       }
     }
 
