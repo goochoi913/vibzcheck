@@ -16,6 +16,9 @@ class SessionProvider extends ChangeNotifier {
   List<TrackModel> _tracks = const [];
   final Set<String> _votedTrackIds = <String>{};
   final Map<String, int> _votePulseTokens = <String, int>{};
+  bool _newTrackAdded = false;
+  TrackModel? _latestTrack;
+  bool _hasReceivedInitialTrackSnapshot = false;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -30,6 +33,8 @@ class SessionProvider extends ChangeNotifier {
   Set<String> get votedTrackIds => Set<String>.unmodifiable(_votedTrackIds);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get newTrackAdded => _newTrackAdded;
+  TrackModel? get latestTrack => _latestTrack;
 
   int votePulseTokenForTrack(String trackId) => _votePulseTokens[trackId] ?? 0;
 
@@ -85,6 +90,9 @@ class SessionProvider extends ChangeNotifier {
     _votePulseTokens.clear();
     _errorMessage = null;
     _currentUserUID = null;
+    _newTrackAdded = false;
+    _latestTrack = null;
+    _hasReceivedInitialTrackSnapshot = false;
     notifyListeners();
   }
 
@@ -138,6 +146,9 @@ class SessionProvider extends ChangeNotifier {
 
   Future<void> _listenToSession(String sessionId) async {
     await _cancelSubscriptions();
+    _hasReceivedInitialTrackSnapshot = false;
+    _newTrackAdded = false;
+    _latestTrack = null;
 
     _sessionSubscription = _firestoreService
         .getSession(sessionId)
@@ -156,7 +167,18 @@ class SessionProvider extends ChangeNotifier {
         .getTracksStream(sessionId)
         .listen(
           (tracks) {
+            final previousTrackIds = _tracks.map((track) => track.trackId).toSet();
+            if (_hasReceivedInitialTrackSnapshot && tracks.length > _tracks.length) {
+              final newlyAdded = tracks.where(
+                (track) => !previousTrackIds.contains(track.trackId),
+              );
+              if (newlyAdded.isNotEmpty) {
+                _latestTrack = newlyAdded.first;
+                _newTrackAdded = true;
+              }
+            }
             _tracks = tracks;
+            _hasReceivedInitialTrackSnapshot = true;
             notifyListeners();
             unawaited(_refreshVotedTrackIdsForCurrentUser());
           },
@@ -218,6 +240,12 @@ class SessionProvider extends ChangeNotifier {
     await _tracksSubscription?.cancel();
     _sessionSubscription = null;
     _tracksSubscription = null;
+  }
+
+  void consumeNewTrackBanner() {
+    if (!_newTrackAdded) return;
+    _newTrackAdded = false;
+    notifyListeners();
   }
 
   void _setLoading(bool value) {
