@@ -102,6 +102,57 @@ class _LobbyViewState extends State<_LobbyView> {
     );
   }
 
+  Future<void> _showJoinWithRoomIdDialog(BuildContext context) async {
+    final sessionProvider = context.read<SessionProvider>();
+    final currentUser = widget.currentUser;
+    final controller = TextEditingController();
+
+    final sessionId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join with Room ID'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Room ID',
+            hintText: 'Paste session ID',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final id = controller.text.trim();
+              if (id.isEmpty) return;
+              Navigator.of(dialogContext).pop(id);
+            },
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (!mounted || currentUser == null || sessionId == null) return;
+
+    await sessionProvider.joinSession(sessionId: sessionId, userUID: currentUser.uid);
+
+    if (!mounted) return;
+    final error = sessionProvider.errorMessage;
+    if (error != null && error.isNotEmpty) {
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Unable to join room: $error'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = widget.currentUser;
@@ -198,6 +249,16 @@ class _LobbyViewState extends State<_LobbyView> {
                   );
                 },
               ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: currentUser == null
+                  ? null
+                  : () {
+                      _showJoinWithRoomIdDialog(context);
+                    },
+              icon: const Icon(Icons.meeting_room_outlined),
+              label: const Text('Join with Room ID'),
             ),
           ],
         ),

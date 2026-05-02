@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../firebase/firestore_service.dart';
@@ -186,12 +187,56 @@ class _CollaboratorPlaylistView extends StatelessWidget {
 Future<void> _showSessionShareDialog(BuildContext context, String sessionId) {
   return showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Share Room'),
-      content: Text('Session ID: $sessionId'),
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Invite Collaborators'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Room ID'),
+          const SizedBox(height: 8),
+          Text(
+            sessionId,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: sessionId));
+              if (!dialogContext.mounted) return;
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                const SnackBar(content: Text('Room ID copied to clipboard')),
+              );
+            },
+            icon: const Icon(Icons.copy_outlined),
+            label: const Text('Copy to Clipboard'),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade800,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.qr_code_2, size: 42),
+                SizedBox(height: 6),
+                Text('QR coming soon'),
+              ],
+            ),
+          ),
+        ],
+      ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(dialogContext).pop(),
           child: const Text('Close'),
         ),
       ],
