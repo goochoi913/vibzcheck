@@ -4,6 +4,17 @@ import '../models/session_model.dart';
 import '../models/track_model.dart';
 import '../models/user_model.dart';
 
+class AlreadyVotedException implements Exception {
+  const AlreadyVotedException([
+    this.message = 'You already voted on this track.',
+  ]);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class FirestoreService {
   FirestoreService._({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -119,6 +130,74 @@ class FirestoreService {
     return tracksRef(sessionId).doc(trackId).delete();
   }
 
+  Future<void> voteOnTrack({
+    required String sessionId,
+    required String trackId,
+    required String voterUID,
+  }) async {
+    final trackRef = tracksRef(sessionId).doc(trackId);
+    final voteRef = trackRef.collection('votes').doc(voterUID);
+
+    await _firestore.runTransaction((transaction) async {
+      final trackSnapshot = await transaction.get(trackRef);
+      if (!trackSnapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          message: 'Track not found.',
+        );
+      }
+
+      final voteSnapshot = await transaction.get(voteRef);
+      if (voteSnapshot.exists) {
+        throw const AlreadyVotedException();
+      }
+
+      transaction.set(voteRef, {
+        'voterUID': voterUID,
+        'votedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.update(trackRef, {'voteCount': FieldValue.increment(1)});
+    });
+  }
+
+  Future<void> removeVote({
+    required String sessionId,
+    required String trackId,
+    required String voterUID,
+  }) async {
+    final trackRef = tracksRef(sessionId).doc(trackId);
+    final voteRef = trackRef.collection('votes').doc(voterUID);
+
+    await _firestore.runTransaction((transaction) async {
+      final trackSnapshot = await transaction.get(trackRef);
+      if (!trackSnapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          message: 'Track not found.',
+        );
+      }
+
+      final voteSnapshot = await transaction.get(voteRef);
+      if (!voteSnapshot.exists) {
+        return;
+      }
+
+      transaction.delete(voteRef);
+      transaction.update(trackRef, {'voteCount': FieldValue.increment(-1)});
+    });
+  }
+
+  Future<bool> hasUserVotedOnTrack({
+    required String sessionId,
+    required String trackId,
+    required String voterUID,
+  }) async {
+    final voteSnapshot = await tracksRef(
+      sessionId,
+    ).doc(trackId).collection('votes').doc(voterUID).get();
+    return voteSnapshot.exists;
+  }
+
   Future<UserModel?> getUser(String uid) async {
     final snapshot = await userDoc(uid).get();
     final data = snapshot.data();
@@ -128,5 +207,15 @@ class FirestoreService {
 
   Future<void> updateUser(UserModel user) {
     return userDoc(user.uid).set(user.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> updateTrackMoodTags({
+    required String sessionId,
+    required String trackId,
+    required List<String> moodTags,
+  }) {
+    return tracksRef(
+      sessionId,
+    ).doc(trackId).set({'moodTags': moodTags}, SetOptions(merge: true));
   }
 }

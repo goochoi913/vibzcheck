@@ -73,8 +73,51 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void voteOnTrack(String trackId) {
-    debugPrint('voteOnTrack tapped for trackId: $trackId');
+  Future<void> voteOnTrack({
+    required String trackId,
+    required String voterUID,
+  }) async {
+    final sessionId = _currentSession?.sessionId;
+    if (sessionId == null) return;
+
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _firestoreService.voteOnTrack(
+        sessionId: sessionId,
+        trackId: trackId,
+        voterUID: voterUID,
+      );
+    } on AlreadyVotedException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = 'Unable to register vote. Please try again.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeVote({
+    required String trackId,
+    required String voterUID,
+  }) async {
+    final sessionId = _currentSession?.sessionId;
+    if (sessionId == null) return;
+
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _firestoreService.removeVote(
+        sessionId: sessionId,
+        trackId: trackId,
+        voterUID: voterUID,
+      );
+    } catch (error) {
+      _errorMessage = 'Unable to remove vote. Please try again.';
+      notifyListeners();
+    }
   }
 
   Future<void> _listenToSession(String sessionId) async {

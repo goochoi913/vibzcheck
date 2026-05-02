@@ -66,7 +66,8 @@ class _HostPlaylistView extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () => _showSessionShareDialog(context, session.sessionId),
+            onPressed: () =>
+                _showSessionShareDialog(context, session.sessionId),
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Share Room',
           ),
@@ -127,6 +128,7 @@ class _CollaboratorPlaylistView extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessionProvider = context.watch<SessionProvider>();
     final session = sessionProvider.currentSession!;
+    final voterUID = context.watch<AuthProvider>().currentUser?.uid;
 
     return Scaffold(
       appBar: AppBar(
@@ -175,7 +177,13 @@ class _CollaboratorPlaylistView extends StatelessWidget {
               track: track,
               isHost: false,
               currentVoteCount: track.voteCount,
-              onVote: () => sessionProvider.voteOnTrack(track.trackId),
+              onVote: () {
+                if (voterUID == null) return;
+                sessionProvider.voteOnTrack(
+                  trackId: track.trackId,
+                  voterUID: voterUID,
+                );
+              },
             ),
           );
         },
