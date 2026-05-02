@@ -9,6 +9,10 @@ import 'home_screen.dart';
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
+  static _MainNavigationState? maybeOf(BuildContext context) {
+    return context.findAncestorStateOfType<_MainNavigationState>();
+  }
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
@@ -23,6 +27,13 @@ class _MainNavigationState extends State<MainNavigation> {
     InsightsScreen(),
     ProfileScreen(),
   ];
+
+  void switchToTab(int index) {
+    if (index < 0 || index >= _screens.length) return;
+    setState(() {
+      _currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
