@@ -128,12 +128,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   String _parseAuthError(Object error) {
-    final message = error.toString();
-    if (message.contains('user-not-found')) return 'No account found for this email.';
+    final message = error.toString().toLowerCase();
+    if (message.contains('network-request-failed') ||
+        message.contains('network error') ||
+        message.contains('unreachable host') ||
+        message.contains('no address associated') ||
+        message.contains('timeout')) {
+      return 'Network error — cannot reach Firebase. '
+          'Check your internet connection, or disable '
+          '"Email Enumeration Protection" in the Firebase Console '
+          '(Authentication → Settings).';
+    }
+    if (message.contains('user-not-found') || message.contains('invalid-credential')) {
+      return 'No account found for this email.';
+    }
     if (message.contains('wrong-password')) return 'Incorrect password.';
     if (message.contains('invalid-email')) return 'Please enter a valid email address.';
     if (message.contains('email-already-in-use')) return 'An account with this email already exists.';
     if (message.contains('weak-password')) return 'Password must be at least 6 characters.';
+    if (message.contains('too-many-requests')) return 'Too many attempts. Please wait a moment and try again.';
     return 'Authentication failed. Please try again.';
   }
 
