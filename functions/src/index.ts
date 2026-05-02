@@ -1,9 +1,12 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
 const spotifyTokenUrl = "https://accounts.spotify.com/api/token";
 const spotifyApiBase = "https://api.spotify.com/v1";
+const db = getFirestore(initializeApp());
 
 type SpotifySearchTrack = {
   trackId: string;
@@ -16,6 +19,27 @@ type SpotifySearchTrack = {
 type SpotifyConfig = {
   clientId: string;
   clientSecret: string;
+};
+
+type SpotifyRecommendationsResponse = {
+  tracks?: Array<{
+    id?: string;
+    name?: string;
+    artists?: Array<{ name?: string }>;
+    album?: { images?: Array<{ url?: string }> };
+    preview_url?: string | null;
+  }>;
+};
+
+const moodToSpotifyGenre: Record<string, string[]> = {
+  chill: ["chill", "ambient", "acoustic"],
+  hype: ["dance", "edm", "hip-hop"],
+  sad: ["acoustic", "blues", "piano"],
+  happy: ["pop", "dance", "funk"],
+  focused: ["study", "classical", "ambient"],
+  party: ["party", "dance", "electro"],
+  throwback: ["disco", "funk", "old-school"],
+  indie: ["indie", "alternative", "rock"],
 };
 
 const spotifyClientId = defineSecret("SPOTIFY_CLIENT_ID");
@@ -69,6 +93,30 @@ async function getSpotifyAccessToken(): Promise<string> {
   return body.access_token;
 }
 
+function simplifySpotifyTrack(item: {
+  id?: string;
+  name?: string;
+  artists?: Array<{ name?: string }>;
+  album?: { images?: Array<{ url?: string }> };
+  preview_url?: string | null;
+}): SpotifySearchTrack | null {
+  if (!item.id || !item.name) {
+    return null;
+  }
+
+  return {
+    trackId: item.id,
+    trackName: item.name,
+    artistName:
+      item.artists
+        ?.map((artist) => artist.name)
+        .filter((name): name is string => Boolean(name))
+        .join(", ") ?? "Unknown Artist",
+    albumArtUrl: item.album?.images?.[0]?.url ?? "",
+    previewUrl: item.preview_url ?? null,
+  };
+}
+
 export const searchSpotifyTracks = onCall(
   {
     region: "us-central1",
@@ -116,20 +164,99 @@ export const searchSpotifyTracks = onCall(
     };
 
     const tracks: SpotifySearchTrack[] = (body.tracks?.items ?? [])
-      .filter((item) => item.id && item.name)
-      .map((item) => ({
-        trackId: item.id!,
-        trackName: item.name!,
-        artistName:
-          item.artists
-            ?.map((artist) => artist.name)
-            .filter((name): name is string => Boolean(name))
-            .join(", ") ?? "Unknown Artist",
-        albumArtUrl: item.album?.images?.[0]?.url ?? "",
-        previewUrl: item.preview_url ?? null,
-      }));
+      .map((item) => simplifySpotifyTrack(item))
+      .filter((item): item is SpotifySearchTrack => item !== null);
 
     return tracks;
+  },
+);
+
+export const getRecommendations = onCall(
+  {
+    region: "us-central1",
+    invoker: "public",
+    secrets: [spotifyClientId, spotifyClientSecret],
+  },
+  async (request) => {
+    const sessionId = (request.data?.sessionId as string | undefined ?? "").trim();
+
+    if (!sessionId) {
+      throw new HttpsError("invalid-argument", "sessionId is required.");
+    }
+
+    const tracksSnapshot = await db
+      .collection("sessions")
+      .doc(sessionId)
+      .collection("tracks")
+      .get();
+
+    if (tracksSnapshot.empty) {
+      return [] as SpotifySearchTrack[];
+    }
+
+    const tagFrequency = new Map<string, number>();
+    for (const doc of tracksSnapshot.docs) {
+      const moodTags = doc.data().moodTags as string[] | undefined;
+      for (const tag of moodTags ?? []) {
+        const normalized = tag.trim().toLowerCase();
+        if (!normalized) continue;
+        tagFrequency.set(normalized, (tagFrequency.get(normalized) ?? 0) + 1);
+      }
+    }
+
+    const topTags = [...tagFrequency.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag]) => tag)
+      .slice(0, 2);
+
+    const seedGenres = new Set<string>();
+    for (const tag of topTags) {
+      for (const genre of moodToSpotifyGenre[tag] ?? []) {
+        seedGenres.add(genre);
+      }
+      if (seedGenres.size >= 2) break;
+    }
+    if (seedGenres.size == 0) {
+      seedGenres.add("pop");
+      seedGenres.add("indie");
+    } else if (seedGenres.size == 1) {
+      seedGenres.add("dance");
+    }
+
+    const token = await getSpotifyAccessToken();
+    const url = new URL(`${spotifyApiBase}/recommendations`);
+    url.searchParams.set("seed_genres", [...seedGenres].slice(0, 2).join(","));
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("market", "US");
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error("Spotify recommendations request failed", {
+        sessionId,
+        topTags,
+        seedGenres: [...seedGenres],
+        status: response.status,
+        errorText,
+      });
+      throw new HttpsError(
+        "internal",
+        `Spotify recommendations failed: ${errorText}`,
+      );
+    }
+
+    const body = (await response.json()) as SpotifyRecommendationsResponse;
+    const recommendations = (body.tracks ?? [])
+      .map((item) => simplifySpotifyTrack(item))
+      .filter((item): item is SpotifySearchTrack => item !== null)
+      .slice(0, 5);
+
+    return recommendations;
   },
 );
 
