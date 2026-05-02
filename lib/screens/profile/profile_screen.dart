@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../firebase/firestore_service.dart';
@@ -18,11 +22,79 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   Future<UserStats>? _statsFuture;
   String? _statsUserUID;
+  bool _isUploadingAvatar = false;
+  double _avatarUploadProgress = 0;
+  String? _pendingPhotoUrl;
 
   void _ensureStatsFuture(String userUID) {
     if (_statsUserUID == userUID && _statsFuture != null) return;
     _statsUserUID = userUID;
     _statsFuture = FirestoreService.instance.getUserStats(userUID);
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.currentUser;
+    if (user == null || _isUploadingAvatar) return;
+
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1200,
+      maxHeight: 1200,
+    );
+    if (picked == null) return;
+
+    if (!mounted) return;
+    setState(() {
+      _isUploadingAvatar = true;
+      _avatarUploadProgress = 0;
+    });
+
+    try {
+      final file = File(picked.path);
+      final ref = FirebaseStorage.instance.ref(
+        'user-avatars/${user.uid}/avatar.jpg',
+      );
+      final uploadTask = ref.putFile(
+        file,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      final progressSubscription = uploadTask.snapshotEvents.listen((event) {
+        if (!mounted) return;
+        final total = event.totalBytes;
+        final progress = total == 0 ? 0.0 : event.bytesTransferred / total;
+        setState(() {
+          _avatarUploadProgress = progress.clamp(0.0, 1.0);
+        });
+      });
+
+      await uploadTask;
+      await progressSubscription.cancel();
+      final downloadUrl = await ref.getDownloadURL();
+
+      final updated = user.copyWith(photoURL: downloadUrl);
+      await FirestoreService.instance.updateUser(updated);
+      authProvider.updateCurrentUser(updated);
+
+      if (!mounted) return;
+      setState(() {
+        _pendingPhotoUrl = downloadUrl;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Avatar upload failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingAvatar = false;
+          _avatarUploadProgress = 0;
+        });
+      }
+    }
   }
 
   @override
@@ -37,6 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     _ensureStatsFuture(user.uid);
+    final photoUrl = _pendingPhotoUrl ?? user.photoURL;
 
     return Scaffold(
       appBar: AppBar(
@@ -60,12 +133,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: UserAvatar(
-                  photoURL: user.photoURL,
-                  displayName: user.displayName,
-                  radius: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    UserAvatar(
+                      photoURL: photoUrl,
+                      displayName: user.displayName,
+                      radius: 46,
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _isUploadingAvatar
+                              ? null
+                              : _pickAndUploadAvatar,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.photo_camera_outlined,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              if (_isUploadingAvatar) ...[
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: _avatarUploadProgress),
+              ],
               const SizedBox(height: 16),
               Text(
                 user.displayName,

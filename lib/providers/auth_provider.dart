@@ -56,10 +56,9 @@ class AuthProvider extends ChangeNotifier {
   UserModel _buildUserFromFirebase(User firebaseUser) {
     return UserModel(
       uid: firebaseUser.uid,
-      displayName:
-          (firebaseUser.displayName?.trim().isNotEmpty == true)
-              ? firebaseUser.displayName!
-              : (firebaseUser.email?.split('@').first ?? 'User'),
+      displayName: (firebaseUser.displayName?.trim().isNotEmpty == true)
+          ? firebaseUser.displayName!
+          : (firebaseUser.email?.split('@').first ?? 'User'),
       email: firebaseUser.email ?? '',
       photoURL: firebaseUser.photoURL,
       favoriteGenres: const [],
@@ -127,6 +126,11 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  void updateCurrentUser(UserModel user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
   String _parseAuthError(Object error) {
     final message = error.toString().toLowerCase();
     if (message.contains('network-request-failed') ||
@@ -139,14 +143,25 @@ class AuthProvider extends ChangeNotifier {
           '"Email Enumeration Protection" in the Firebase Console '
           '(Authentication → Settings).';
     }
-    if (message.contains('user-not-found') || message.contains('invalid-credential')) {
+    if (message.contains('user-not-found') ||
+        message.contains('invalid-credential')) {
       return 'No account found for this email.';
     }
-    if (message.contains('wrong-password')) return 'Incorrect password.';
-    if (message.contains('invalid-email')) return 'Please enter a valid email address.';
-    if (message.contains('email-already-in-use')) return 'An account with this email already exists.';
-    if (message.contains('weak-password')) return 'Password must be at least 6 characters.';
-    if (message.contains('too-many-requests')) return 'Too many attempts. Please wait a moment and try again.';
+    if (message.contains('wrong-password')) {
+      return 'Incorrect password.';
+    }
+    if (message.contains('invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (message.contains('email-already-in-use')) {
+      return 'An account with this email already exists.';
+    }
+    if (message.contains('weak-password')) {
+      return 'Password must be at least 6 characters.';
+    }
+    if (message.contains('too-many-requests')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
     return 'Authentication failed. Please try again.';
   }
 
