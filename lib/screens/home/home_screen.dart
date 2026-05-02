@@ -47,9 +47,11 @@ class _LobbyViewState extends State<_LobbyView> {
   }
 
   Future<void> _showCreateRoomDialog(BuildContext context) async {
+    final sessionProvider = context.read<SessionProvider>();
+    final currentUser = widget.currentUser;
     final controller = TextEditingController();
 
-    await showDialog<void>(
+    final sessionName = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
@@ -68,19 +70,12 @@ class _LobbyViewState extends State<_LobbyView> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () async {
+              onPressed: () {
                 final name = controller.text.trim();
-                if (name.isEmpty || widget.currentUser == null) {
+                if (name.isEmpty) {
                   return;
                 }
-
-                await context.read<SessionProvider>().createSession(
-                  sessionName: name,
-                  hostUID: widget.currentUser!.uid,
-                );
-
-                if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop();
+                Navigator.of(dialogContext).pop(name);
               },
               child: const Text('Create'),
             ),
@@ -90,6 +85,18 @@ class _LobbyViewState extends State<_LobbyView> {
     );
 
     controller.dispose();
+
+    if (!mounted || currentUser == null || sessionName == null) {
+      return;
+    }
+
+    final trimmedName = sessionName.trim();
+    if (trimmedName.isEmpty) return;
+
+    await sessionProvider.createSession(
+      sessionName: trimmedName,
+      hostUID: currentUser.uid,
+    );
   }
 
   @override
