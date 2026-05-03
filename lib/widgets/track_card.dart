@@ -1,8 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/track_model.dart';
-import 'preview_play_button.dart';
 import 'vote_button.dart';
 
 class TrackCard extends StatelessWidget {
@@ -26,6 +26,21 @@ class TrackCard extends StatelessWidget {
   final VoidCallback? onVote;
   final VoidCallback? onDelete;
   final VoidCallback? onLongPress;
+
+  Future<void> _openInSpotify() async {
+    final trackId = track.spotifyTrackId;
+    if (trackId.isEmpty) return;
+
+    // Try the native Spotify app first, fall back to web
+    final appUri = Uri.parse('spotify:track:$trackId');
+    final webUri = Uri.parse('https://open.spotify.com/track/$trackId');
+
+    if (await canLaunchUrl(appUri)) {
+      await launchUrl(appUri);
+    } else {
+      await launchUrl(webUri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,11 +91,35 @@ class TrackCard extends StatelessWidget {
                   track.artistName,
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
                 ),
-                const SizedBox(height: 2),
-                PreviewPlayButton(
-                  trackId: track.trackId,
-                  previewUrl: track.previewUrl,
-                ),
+                const SizedBox(height: 4),
+                // Open in Spotify button
+                if (track.spotifyTrackId.isNotEmpty)
+                  InkWell(
+                    onTap: _openInSpotify,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.open_in_new,
+                            size: 13,
+                            color: Colors.green.shade400,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Open in Spotify',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade400,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (track.moodTags.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
